@@ -30,3 +30,20 @@
 - **Technologies**:
   - **FluidSynth + SoundFonts**: Jouer les notes en direct avec un instrument réaliste (piano, guitare, etc.).
   - **RtMidi**: Bibliothèque C++ avec bindings Python pour une gestion en temps réel du MIDI, assurant une latence ultra-faible.
+
+## Phases de Développement
+- **Implémentation Grossière**: 
+  - Développer une version initiale de la solution avec les fonctionnalités de base.
+  - Tester les flux de travail principaux pour s'assurer que chaque composant fonctionne ensemble.
+
+- **Raffinement et Optimisation**: 
+  - Améliorer les algorithmes de traitement d'image et de reconnaissance musicale.
+  - Optimiser les performances pour réduire la latence et améliorer la précision.
+  - Effectuer des tests utilisateurs pour recueillir des retours et ajuster les fonctionnalités.
+
+- **Portage sur Mobile**: 
+  - Explorer les options pour porter l'application sur des plateformes mobiles en privilégiant les solutions Python :
+    - **Kivy**: Framework Python pour le développement d'applications multiplateformes, y compris Android et iOS.
+    - **BeeWare**: Outils pour créer des applications natives en Python pour différentes plateformes, y compris mobile.
+    - **PyQt/PySide**: Pour créer des applications avec une interface graphique qui peuvent être adaptées pour mobile, bien que cela nécessite des ajustements supplémentaires.
+  - Adapter les fonctionnalités pour une utilisation mobile, en tenant compte des limitations de performance et d'interface.
