@@ -10,13 +10,13 @@ class PParser:
     def __init__(self, config=None):
         # Default hyperparameters
         self.config = {
-            'gaussian_kernel': (5, 5),  # Blur kernel size
-            'gaussian_sigma': 0,        # Blur sigma
-            'morph_kernel': (3, 3),     # Morphological kernel size
-            'min_contour_area': 100,    # Minimum contour area
-            'dilate_iterations': 2,     # Dilation iterations
-            'resize_max_dim': 1000,     # Maximum dimension for resize
-        }
+            'gaussian_kernel': (7, 7),
+            'gaussian_sigma': 1,
+            'morph_kernel': (5, 5),
+            'min_contour_area': 200,
+            'dilate_iterations': 3,
+            'resize_max_dim': 1200
+    }
         
         if config:
             self.config.update(config)
@@ -122,6 +122,130 @@ class PParser:
             new_height = int(height * (max_dim / width))
         
         return cv2.resize(image, (new_width, new_height))
+    
+    def score(self, contours, image, mode='full_lines'):
+        """
+        Score the parsing results.
+        
+        Args:
+            contours: List of detected contours
+            image: Original image
+            mode: Scoring mode ('full_lines', 'note_groups', 'single_notes')
+        
+        Returns:
+            tuple: (scores_dict, percentage) where scores_dict contains all metrics 
+            and percentage is computed from the relevant metrics for the selected mode
+        """
+        scores = {}
+        
+        # Basic metrics
+        scores['num_contours'] = len(contours)
+        total_area = image.shape[0] * image.shape[1]
+        contour_area = sum(cv2.contourArea(c) for c in contours)
+        scores['area_coverage'] = contour_area / total_area
+
+        if not contours:
+            return scores, 0.0
+
+        # Mode-specific metrics
+        if mode == 'full_lines':
+
+            aspect_ratios = []
+            horizontal_alignment = []
+            width_coverage = [] 
+            vertical_distribution = []  
+            
+            img_width = image.shape[1]
+            img_height = image.shape[0]
+            
+            sorted_contours = sorted(contours, key=lambda c: cv2.boundingRect(c)[1])
+            
+            for i, c in enumerate(sorted_contours):
+                rect = cv2.minAreaRect(c)
+                box = cv2.boxPoints(rect)
+                width = max(rect[1])
+                height = min(rect[1])
+                
+                aspect_ratio = width / height if height > 0 else 0
+                aspect_ratios.append(aspect_ratio)
+                
+                # Horizontal alignment check (angle close to 0 or 180)
+                angle = rect[2] % 180
+                horizontal_alignment.append(min(abs(angle), abs(180 - angle)))
+                
+                # Width coverage check (how much of the page width is covered)
+                width_coverage.append(width / img_width)
+                
+                # Check vertical distribution if not last contour
+                if i < len(sorted_contours) - 1:
+                    current_y = cv2.boundingRect(c)[1]
+                    next_y = cv2.boundingRect(sorted_contours[i+1])[1]
+                    vertical_gap = next_y - current_y
+                    vertical_distribution.append(vertical_gap)
+            
+            # Calculate scores
+            scores['avg_aspect_ratio'] = np.mean(aspect_ratios)
+            scores['horizontal_alignment'] = sum(a < 10 for a in horizontal_alignment) / len(horizontal_alignment)
+            scores['width_coverage'] = np.mean(width_coverage)
+            
+            # Calculate consistency of vertical spacing
+            if vertical_distribution:
+                vertical_std = np.std(vertical_distribution)
+                vertical_mean = np.mean(vertical_distribution)
+                scores['vertical_consistency'] = 1 / (1 + vertical_std / vertical_mean) if vertical_mean > 0 else 0
+            else:
+                scores['vertical_consistency'] = 0
+            
+            percentage = (
+                0.3 * scores['horizontal_alignment'] +  # Lines are horizontal
+                0.3 * scores['width_coverage'] +        # Lines span most of the page width
+                0.2 * min(scores['avg_aspect_ratio'] / 20, 1.0) +  # Lines are thin relative to width
+                0.2 * scores['vertical_consistency']    # Lines are evenly spaced
+            ) * 100
+            
+        elif mode == 'note_groups':
+
+            sizes = [cv2.contourArea(c) for c in contours]
+            sizes_std = np.std(sizes) / np.mean(sizes) if np.mean(sizes) > 0 else 0
+            scores['size_consistency'] = 1 / (1 + sizes_std)  # Normalized to [0,1]
+            
+            # Vertical spacing between contours
+            centers = [np.mean(c.reshape(-1, 2), axis=0) for c in contours]
+            if len(centers) > 1:
+                vertical_diffs = np.diff([c[1] for c in sorted(centers, key=lambda x: x[1])])
+                scores['vertical_spacing_consistency'] = 1 / (1 + np.std(vertical_diffs))
+                
+            percentage = (
+                0.5 * scores['size_consistency'] +
+                0.5 * scores.get('vertical_spacing_consistency', 0.0)
+            ) * 100
+                
+        elif mode == 'single_notes':
+            # Metrics for detecting individual notes
+            aspect_ratios = []
+            size_variation = []
+            
+            mean_area = np.mean([cv2.contourArea(c) for c in contours])
+            
+            for c in contours:
+                rect = cv2.minAreaRect(c)
+                width = max(rect[1])
+                height = min(rect[1])
+                aspect_ratios.append(width / height if height > 0 else 0)
+                
+                # Individual notes should have similar sizes
+                area = cv2.contourArea(c)
+                size_variation.append(abs(area - mean_area) / mean_area)
+            
+            scores['aspect_ratio_consistency'] = 1 / (1 + np.std(aspect_ratios))
+            scores['size_consistency'] = 1 / (1 + np.mean(size_variation))
+            
+            percentage = (
+                0.5 * scores['aspect_ratio_consistency'] +
+                0.5 * scores['size_consistency']
+            ) * 100
+        
+        return scores, round(percentage, 1)
 
 if __name__ == "__main__":
     custom_config = {
@@ -134,10 +258,10 @@ if __name__ == "__main__":
     }
     
     parser = PParser(config=custom_config) 
-    image = parser.imread("resources/samples/fire.jpg")
+    image = parser.imread("resources/samples/hush.jpg")
     image = parser.resize(image)  
     thresh = parser.preprocess(image)
     cnts = parser.find_contours(thresh)
     result = parser.draw_contours(image, cnts)
-    parser.imwrite("resources/output/test/fire.jpg", result)
+    parser.imwrite("resources/output/test/hush.jpg", result)
     # parser.imshow(result)
