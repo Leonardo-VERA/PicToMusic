@@ -60,8 +60,7 @@ class PParser:
                                cv2.CHAIN_APPROX_SIMPLE)
         cnts = imutils.grab_contours(cnts)
         cnts = [c for c in cnts if cv2.contourArea(c) > self.config['min_contour_area']]
-        cnts = self.__sort_contours(cnts)
-        return cnts
+        return cnts[::-1]
     
     def __sort_contours(self, cnts):
         (cnts, _) = contours.sort_contours(cnts)
@@ -123,19 +122,18 @@ class PParser:
         
         return cv2.resize(image, (new_width, new_height))
     
+    def extract_contours(self, image, contours):
+        results = []
+        for c in contours:
+            if cv2.contourArea(c) > self.config['min_contour_area']:
+                # Get bounding rectangle
+                x, y, w, h = cv2.boundingRect(c)
+                # Extract region
+                region = image[y:y+h, x:x+w]
+                results.append(region)
+        return results
+    
     def score(self, contours, image, mode='full_lines'):
-        """
-        Score the parsing results.
-        
-        Args:
-            contours: List of detected contours
-            image: Original image
-            mode: Scoring mode ('full_lines', 'note_groups', 'single_notes')
-        
-        Returns:
-            tuple: (scores_dict, percentage) where scores_dict contains all metrics 
-            and percentage is computed from the relevant metrics for the selected mode
-        """
         scores = {}
         
         # Basic metrics
