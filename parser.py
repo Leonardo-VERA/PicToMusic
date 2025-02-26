@@ -7,6 +7,20 @@ import os
 
 class PParser:
     
+    def __init__(self, config=None):
+        # Default hyperparameters
+        self.config = {
+            'gaussian_kernel': (5, 5),  # Blur kernel size
+            'gaussian_sigma': 0,        # Blur sigma
+            'morph_kernel': (3, 3),     # Morphological kernel size
+            'min_contour_area': 100,    # Minimum contour area
+            'dilate_iterations': 2,     # Dilation iterations
+            'resize_max_dim': 1000,     # Maximum dimension for resize
+        }
+        
+        if config:
+            self.config.update(config)
+    
     def imread(self, path):
         return cv2.imread(path)
     
@@ -32,19 +46,20 @@ class PParser:
     
     def preprocess(self, image):
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        blurred = cv2.GaussianBlur(gray, self.config['gaussian_kernel'], 
+                                  self.config['gaussian_sigma'])
         thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
-        # Remove noise with morphological operations
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, self.config['morph_kernel'])
         thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
         return thresh
     
-    def find_contours(self, image, dilate_iterations=2):
-        dilated_image = cv2.dilate(image, None, iterations=dilate_iterations)
-        cnts = cv2.findContours(dilated_image.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    def find_contours(self, image):
+        dilated_image = cv2.dilate(image, None, 
+                                  iterations=self.config['dilate_iterations'])
+        cnts = cv2.findContours(dilated_image.copy(), cv2.RETR_EXTERNAL, 
+                               cv2.CHAIN_APPROX_SIMPLE)
         cnts = imutils.grab_contours(cnts)
-        # Filter contours by size here instead of in draw_contours
-        cnts = [c for c in cnts if cv2.contourArea(c) > 100]
+        cnts = [c for c in cnts if cv2.contourArea(c) > self.config['min_contour_area']]
         cnts = self.__sort_contours(cnts)
         return cnts
     
@@ -61,7 +76,7 @@ class PParser:
     def draw_contours(self, image, contours, color=(0, 255, 0), thickness=2):
         orig = image.copy()
         for c in contours:
-            # Removed size check since we filtered earlier
+            # Get the minimum area rectangle
             box = cv2.minAreaRect(c)
             box = cv2.cv.BoxPoints(box) if imutils.is_cv2() else cv2.boxPoints(box)
             box = np.array(box, dtype="int")
@@ -70,7 +85,7 @@ class PParser:
             # Draw all elements in one pass
             cv2.drawContours(orig, [box.astype("int")], -1, color, thickness)
             
-            # Calculate all midpoints at once
+            # Calculate all midpoints 
             tl, tr, br, bl = box
             midpoints = [
                 self._mid_point(tl, tr),  # top
@@ -91,14 +106,38 @@ class PParser:
         
         return orig
     
+    def resize(self, image, max_dim=None):
+        if max_dim is None:
+            max_dim = self.config['resize_max_dim']
+        
+        if image.shape[0] <= max_dim and image.shape[1] <= max_dim:
+            return image
+        
+        height, width = image.shape[:2]
+        if height > width:
+            new_height = max_dim
+            new_width = int(width * (max_dim / height))
+        else:
+            new_width = max_dim
+            new_height = int(height * (max_dim / width))
+        
+        return cv2.resize(image, (new_width, new_height))
+
 if __name__ == "__main__":
-    parser = PParser()
-    image = parser.imread("resources/samples/hush.jpg")
-    # Add image size check and resize if needed
-    if image.shape[0] > 1000 or image.shape[1] > 1000:
-        image = cv2.resize(image, (1000, int(1000 * image.shape[0] / image.shape[1])))
+    custom_config = {
+        'gaussian_kernel': (7, 7),
+        'gaussian_sigma': 1,
+        'morph_kernel': (5, 5),
+        'min_contour_area': 200,
+        'dilate_iterations': 3,
+        'resize_max_dim': 1200
+    }
+    
+    parser = PParser(config=custom_config) 
+    image = parser.imread("resources/samples/fire.jpg")
+    image = parser.resize(image)  
     thresh = parser.preprocess(image)
     cnts = parser.find_contours(thresh)
     result = parser.draw_contours(image, cnts)
-    parser.imwrite("resources/output/hush.jpg", result)
+    parser.imwrite("resources/output/test/fire.jpg", result)
     # parser.imshow(result)
