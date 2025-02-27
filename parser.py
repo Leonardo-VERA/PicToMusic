@@ -10,13 +10,14 @@ class PParser:
     def __init__(self, config=None):
         # Default hyperparameters
         self.config = {
-            'gaussian_kernel': (7, 7),
-            'gaussian_sigma': 1,
-            'morph_kernel': (5, 5),
-            'min_contour_area': 200,
-            'dilate_iterations': 3,
-            'resize_max_dim': 1200
-    }
+            'gaussian_kernel': (5, 5),      # How much to blur the image
+            'gaussian_sigma': 1,            # Intensity of the blur
+            'morph_kernel': (5, 5),         # Size of gaps to fill in
+            'min_contour_area': 200,        # Minimum size of shapes to detect
+            'dilate_iterations': 3,         # How much to thicken detected shapes
+            'resize_max_dim': 1200,         # Maximum image size
+            'padding_size': 100             # Border width around image
+        }
         
         if config:
             self.config.update(config)
@@ -24,7 +25,7 @@ class PParser:
     def imread(self, path):
         return cv2.imread(path)
     
-    def imwrite(self, path, image, overwrite=True):
+    def imwrite(self, path, image, overwrite=False):
         directory = os.path.dirname(path)
         if directory and not os.path.exists(directory):
             os.makedirs(directory)
@@ -44,14 +45,39 @@ class PParser:
         if key == 27 or cv2.getWindowProperty("Image", cv2.WND_PROP_VISIBLE) < 1:
             cv2.destroyAllWindows()
     
-    def preprocess(self, image):
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    def preprocess(self, image, remove_staff_lines=False):
+        pad_size = self.config['padding_size']
+        if pad_size > 0:
+            padded = cv2.copyMakeBorder(
+                image,
+                pad_size, pad_size, pad_size, pad_size,
+                cv2.BORDER_CONSTANT,
+                value=[255, 255, 255]
+            )
+        else:
+            padded = image.copy()
+        
+        gray = cv2.cvtColor(padded, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(gray, self.config['gaussian_kernel'], 
                                   self.config['gaussian_sigma'])
         thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
+        
+        if remove_staff_lines:
+            thresh = self.remove_staff_lines(thresh)
+        
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, self.config['morph_kernel'])
         thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+        
+        self.pad_size = pad_size
         return thresh
+    
+    def remove_staff_lines(self, image):
+
+        horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (40, 1))
+        detected_lines = cv2.morphologyEx(image, cv2.MORPH_OPEN, horizontal_kernel, iterations=3)
+        image_without_lines = cv2.subtract(image, detected_lines)
+        
+        return image_without_lines
     
     def find_contours(self, image):
         dilated_image = cv2.dilate(image, None, 
@@ -60,7 +86,14 @@ class PParser:
                                cv2.CHAIN_APPROX_SIMPLE)
         cnts = imutils.grab_contours(cnts)
         cnts = [c for c in cnts if cv2.contourArea(c) > self.config['min_contour_area']]
-        return cnts[::-1]
+        
+        pad_size = getattr(self, 'pad_size', 0)
+        if pad_size:
+            for cnt in cnts:
+                cnt[:, :, 0] -= pad_size
+                cnt[:, :, 1] -= pad_size  
+        
+        return self.__sort_contours(cnts)
     
     def __sort_contours(self, cnts):
         (cnts, _) = contours.sort_contours(cnts)
@@ -122,129 +155,28 @@ class PParser:
         
         return cv2.resize(image, (new_width, new_height))
     
-    def extract_contours(self, image, contours):
+    def extract_contours(self, image, contours, axis, full_height=False):
+
+        if axis == 0:
+            sorted_cnts = sorted(contours, key=lambda c: cv2.boundingRect(c)[0]) 
+        elif axis == 1:
+            sorted_cnts = sorted(contours, key=lambda c: cv2.boundingRect(c)[1]) 
+        else:
+            raise ValueError()
+        
         results = []
-        for c in contours:
+        img_height = image.shape[0]
+        
+        for c in sorted_cnts:
             if cv2.contourArea(c) > self.config['min_contour_area']:
-                # Get bounding rectangle
                 x, y, w, h = cv2.boundingRect(c)
-                # Extract region
-                region = image[y:y+h, x:x+w]
+                if full_height:
+                    region = image[0:img_height, x:x+w]
+                else:
+                    region = image[y:y+h, x:x+w] 
                 results.append(region)
         return results
-    
-    def score(self, contours, image, mode='full_lines'):
-        scores = {}
-        
-        # Basic metrics
-        scores['num_contours'] = len(contours)
-        total_area = image.shape[0] * image.shape[1]
-        contour_area = sum(cv2.contourArea(c) for c in contours)
-        scores['area_coverage'] = contour_area / total_area
-
-        if not contours:
-            return scores, 0.0
-
-        # Mode-specific metrics
-        if mode == 'full_lines':
-
-            aspect_ratios = []
-            horizontal_alignment = []
-            width_coverage = [] 
-            vertical_distribution = []  
             
-            img_width = image.shape[1]
-            img_height = image.shape[0]
-            
-            sorted_contours = sorted(contours, key=lambda c: cv2.boundingRect(c)[1])
-            
-            for i, c in enumerate(sorted_contours):
-                rect = cv2.minAreaRect(c)
-                box = cv2.boxPoints(rect)
-                width = max(rect[1])
-                height = min(rect[1])
-                
-                aspect_ratio = width / height if height > 0 else 0
-                aspect_ratios.append(aspect_ratio)
-                
-                # Horizontal alignment check (angle close to 0 or 180)
-                angle = rect[2] % 180
-                horizontal_alignment.append(min(abs(angle), abs(180 - angle)))
-                
-                # Width coverage check (how much of the page width is covered)
-                width_coverage.append(width / img_width)
-                
-                # Check vertical distribution if not last contour
-                if i < len(sorted_contours) - 1:
-                    current_y = cv2.boundingRect(c)[1]
-                    next_y = cv2.boundingRect(sorted_contours[i+1])[1]
-                    vertical_gap = next_y - current_y
-                    vertical_distribution.append(vertical_gap)
-            
-            # Calculate scores
-            scores['avg_aspect_ratio'] = np.mean(aspect_ratios)
-            scores['horizontal_alignment'] = sum(a < 10 for a in horizontal_alignment) / len(horizontal_alignment)
-            scores['width_coverage'] = np.mean(width_coverage)
-            
-            # Calculate consistency of vertical spacing
-            if vertical_distribution:
-                vertical_std = np.std(vertical_distribution)
-                vertical_mean = np.mean(vertical_distribution)
-                scores['vertical_consistency'] = 1 / (1 + vertical_std / vertical_mean) if vertical_mean > 0 else 0
-            else:
-                scores['vertical_consistency'] = 0
-            
-            percentage = (
-                0.3 * scores['horizontal_alignment'] +  # Lines are horizontal
-                0.3 * scores['width_coverage'] +        # Lines span most of the page width
-                0.2 * min(scores['avg_aspect_ratio'] / 20, 1.0) +  # Lines are thin relative to width
-                0.2 * scores['vertical_consistency']    # Lines are evenly spaced
-            ) * 100
-            
-        elif mode == 'note_groups':
-
-            sizes = [cv2.contourArea(c) for c in contours]
-            sizes_std = np.std(sizes) / np.mean(sizes) if np.mean(sizes) > 0 else 0
-            scores['size_consistency'] = 1 / (1 + sizes_std)  # Normalized to [0,1]
-            
-            # Vertical spacing between contours
-            centers = [np.mean(c.reshape(-1, 2), axis=0) for c in contours]
-            if len(centers) > 1:
-                vertical_diffs = np.diff([c[1] for c in sorted(centers, key=lambda x: x[1])])
-                scores['vertical_spacing_consistency'] = 1 / (1 + np.std(vertical_diffs))
-                
-            percentage = (
-                0.5 * scores['size_consistency'] +
-                0.5 * scores.get('vertical_spacing_consistency', 0.0)
-            ) * 100
-                
-        elif mode == 'single_notes':
-            # Metrics for detecting individual notes
-            aspect_ratios = []
-            size_variation = []
-            
-            mean_area = np.mean([cv2.contourArea(c) for c in contours])
-            
-            for c in contours:
-                rect = cv2.minAreaRect(c)
-                width = max(rect[1])
-                height = min(rect[1])
-                aspect_ratios.append(width / height if height > 0 else 0)
-                
-                # Individual notes should have similar sizes
-                area = cv2.contourArea(c)
-                size_variation.append(abs(area - mean_area) / mean_area)
-            
-            scores['aspect_ratio_consistency'] = 1 / (1 + np.std(aspect_ratios))
-            scores['size_consistency'] = 1 / (1 + np.mean(size_variation))
-            
-            percentage = (
-                0.5 * scores['aspect_ratio_consistency'] +
-                0.5 * scores['size_consistency']
-            ) * 100
-        
-        return scores, round(percentage, 1)
-
 if __name__ == "__main__":
     custom_config = {
         'gaussian_kernel': (7, 7),
