@@ -1,6 +1,7 @@
 from pic2music import PParser
 import numpy as np
 import streamlit as st
+import cv2
 
 def parse_music_sheet(image, progress_bar):
     parser = PParser()
@@ -38,7 +39,7 @@ def parse_music_sheet(image, progress_bar):
                                         dilate_iterations=2, 
                                         min_contour_area=50, 
                                         pad_size=0)
-        note_contours = parser.group_note_components(note_contours, max_horizontal_distance=5)
+        note_contours = parser.group_note_components(note_contours, max_horizontal_distance=2, overlap_threshold=0.2)
         
         # Extract individual notes
         notes = parser.extract_contours(line, note_contours, axis=0, full_height=True)
