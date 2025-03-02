@@ -139,15 +139,19 @@ class PParser:
         return cnts
     
     def group_note_components(self, contours: List[np.ndarray], 
-                             max_horizontal_distance: int = 10) -> List[np.ndarray]:
+                             max_horizontal_distance: int = 10,
+                             overlap_threshold: float = 0.8) -> List[np.ndarray]:
         """
-        Group contours that likely belong to the same musical note based on horizontal proximity.
+        Group contours that likely belong to the same musical note based on horizontal proximity
+        and containment.
         
         Args:
             contours (list): List of contours to group.
             max_horizontal_distance (int, optional): Maximum horizontal distance between 
                                                     contours to be considered part of the same group.
                                                     Defaults to 10.
+            overlap_threshold (float, optional): Minimum overlap ratio to consider a contour as
+                                               contained within another.
             
         Returns:
             list: List of merged contours where each group is represented as a single contour.
@@ -155,23 +159,52 @@ class PParser:
         if not contours:
             return []
         
-        sorted_cnts = sorted(contours, key=lambda c: cv2.boundingRect(c)[0])
-
-        groups = [[sorted_cnts[0]]]
-        
-        # Group contours based on horizontal proximity
-        for i in range(1, len(sorted_cnts)):
-            current_x = cv2.boundingRect(sorted_cnts[i])[0]
-            prev_x = cv2.boundingRect(sorted_cnts[i-1])[0]
-            prev_w = cv2.boundingRect(sorted_cnts[i-1])[2]
+        def calculate_overlap(rect1, rect2):
+            """Calculate the overlap ratio between two rectangles."""
+            x1, y1, w1, h1 = rect1
+            x2, y2, w2, h2 = rect2
             
-            # If current contour is close to previous one, add to the same group
-            if current_x - (prev_x + prev_w) < max_horizontal_distance:
-                groups[-1].append(sorted_cnts[i])
-            else:
-                groups.append([sorted_cnts[i]])
+            x_left = max(x1, x2)
+            y_top = max(y1, y2)
+            x_right = min(x1 + w1, x2 + w2)
+            y_bottom = min(y1 + h1, y2 + h2)
+            
+            if x_right < x_left or y_bottom < y_top:
+                return 0.0
+                
+            intersection_area = (x_right - x_left) * (y_bottom - y_top)
+            smaller_area = min(w1 * h1, w2 * h2)
+            
+            return intersection_area / smaller_area if smaller_area > 0 else 0.0
         
-        # Merge contours in each group
+        groups = []
+        used_contours = set()
+        
+        for i, cnt1 in enumerate(contours):
+            if i in used_contours:
+                continue
+                
+            current_group = [cnt1]
+            rect1 = cv2.boundingRect(cnt1)
+            
+            for j, cnt2 in enumerate(contours[i+1:], start=i+1):
+                if j in used_contours:
+                    continue
+                    
+                rect2 = cv2.boundingRect(cnt2)
+                overlap_ratio = calculate_overlap(rect1, rect2)
+                
+                x1, y1, w1, h1 = rect1
+                x2, y2, w2, h2 = rect2
+                horizontal_close = abs((x1 + w1) - x2) < max_horizontal_distance
+                
+                if horizontal_close or overlap_ratio > overlap_threshold:
+                    current_group.append(cnt2)
+                    used_contours.add(j)
+            
+            used_contours.add(i)
+            groups.append(current_group)
+        
         merged_contours = []
         for group in groups:
             if len(group) == 1:
@@ -190,7 +223,7 @@ class PParser:
                 ]], dtype=np.int32)
                 merged_contours.append(rect)
         
-        return merged_contours
+        return sorted(merged_contours, key=lambda c: cv2.boundingRect(c)[0])
     
     def _add_padding(self, image: np.ndarray, pad_size: int = 0) -> np.ndarray:
         """
