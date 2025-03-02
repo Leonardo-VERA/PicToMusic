@@ -1,4 +1,4 @@
-from Pic2Music import PParser
+from pic2music import PParser
 import numpy as np
 import streamlit as st
 
