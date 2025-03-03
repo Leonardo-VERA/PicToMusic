@@ -136,25 +136,110 @@ with tab2:
 
 if camera_input is not None or uploaded_file is not None:
     st.markdown("---")
+    
+    st.subheader("🔧 Image Processing Parameters")
+    
+    resize_max_dim = st.slider("Image Resolution", 800, 2000, 1200, 100, 
+                              help="Maximum dimension for image resizing. Higher values provide more detail but slower processing.")
+    
+    col_staff, col_notes = st.columns(2)
+    
+    with col_staff:
+        st.markdown("### Staff Line Detection")
+        
+        staff_dilate_iterations = st.number_input("Staff Line Dilation", 
+                                                min_value=1, max_value=10, value=3, step=1,
+                                                help="Number of dilation iterations for staff lines detection")
+        
+        staff_min_contour_area = st.number_input("Min Staff Contour Area", 
+                                               min_value=100, max_value=20000, value=10000, step=1000,
+                                               help="Minimum contour area for staff detection")
+        
+        staff_pad_size = st.number_input("Staff Padding", 
+                                       min_value=0, max_value=50, value=0, step=5,
+                                       help="Adding padding around image to avoid edge effects")
+    
+    # Note detection parameters
+    with col_notes:
+        st.markdown("### Note Detection")
+        
+        note_dilate_iterations = st.number_input("Note Dilation", 
+                                               min_value=1, max_value=10, value=2, step=1,
+                                               help="Number of dilation iterations for note detection")
+        
+        note_min_contour_area = st.number_input("Min Note Contour Area", 
+                                              min_value=10, max_value=1000, value=50, step=25,
+                                              help="Minimum contour area for note detection")
+        
+        # note_pad_size = st.number_input("Note Padding", 
+        #                               min_value=0, max_value=30, value=0, step=2,
+        #                               help="Adding padding around staff lines to avoid edge effects")
+        
+        max_horizontal_distance = st.number_input("Max Horizontal Distance", 
+                                                min_value=0, max_value=10, value=2, step=1,
+                                                help="Maximum horizontal distance between notes")
+        
+    overlap_threshold = st.slider("Overlap Threshold", 
+                                    min_value=0.1, max_value=0.9, value=0.5, step=0.1,
+                                    help="Threshold for determining overlapping elements and merge them")
+    
     if st.button("🎵 Parse Music Sheet"):
         st.subheader("Parsing results...")
         with st.spinner("🎼 Converting your sheet music..."):
             try:
-                # Get the image from either source
+                
                 image_source = uploaded_file if uploaded_file is not None else camera_input
                 
+                params = {
+                    'resize_max_dim': int(resize_max_dim),
+                    'staff_dilate_iterations': int(staff_dilate_iterations),
+                    'staff_min_contour_area': int(staff_min_contour_area),
+                    'staff_pad_size': int(staff_pad_size),
+                    'note_dilate_iterations': int(note_dilate_iterations),
+                    'note_min_contour_area': int(note_min_contour_area),
+                    'note_pad_size': 0,
+                    'max_horizontal_distance': int(max_horizontal_distance),
+                    'overlap_threshold': float(overlap_threshold)
+                }
+
                 # Convert to numpy array
                 image_bytes = image_source.getvalue()
                 nparr = np.frombuffer(image_bytes, np.uint8)
                 image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                 
-                # Initialize progress bar
                 progress_bar = st.progress(0)
                 
-                # Process the image
-                staff_visualization, notes = parse_music_sheet(image, progress_bar)
+                staff_visualization, notes_visualization, all_notes = parse_music_sheet(image, progress_bar, params)
                 
-                # Display results in columns
+                col_visualization, col_results = st.columns(2)
+                
+                # Column 1: Staff Visualization
+                with col_visualization:
+                    st.subheader("Staff Line Detection")
+                    st.image(staff_visualization, caption="Detected Staff Lines")
+                
+                # Column 2: Parsing Results 
+                with col_results:
+                    st.subheader("Parsing Results")
+                    
+                    col_metrics1, col_metrics2 = st.columns(2)
+                    
+                    with col_metrics1:
+                        st.metric(
+                            label="Staff Lines Detected", 
+                            value=len(notes_visualization)
+                        )
+                    
+                    with col_metrics2:
+                        total_elements = sum(len(notes) for notes in all_notes)
+                        st.metric(
+                            label="Musical Elements Detected", 
+                            value=total_elements
+                        )
+                    
+                    for i, note_visualization in enumerate(notes_visualization):
+                        st.image(note_visualization, caption=f"Staff Line {i+1} Analysis")
+                
                 st.success("✨ Music sheet successfully parsed!")
 
                 st.markdown("""
@@ -181,8 +266,6 @@ if camera_input is not None or uploaded_file is not None:
             with st.spinner("🎼 Converting to music..."):
                 pass
         
-
-# Add helpful information at the bottom
 with st.expander("ℹ️ Tips for Best Results"):
     st.markdown("""
         ### 📝 Guidelines for Best Results
