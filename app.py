@@ -63,6 +63,24 @@ st.markdown("""
         border-radius: 10px;
         margin: 1rem 0;
     }
+    .stExpander {
+        background-color: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 1rem;
+    }
+    .stTab {
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .metric-container {
+        background-color: #ffffff;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -209,36 +227,42 @@ if camera_input is not None or uploaded_file is not None:
                 
                 progress_bar = st.progress(0)
                 
-                staff_visualization, notes_visualization, all_notes = parse_music_sheet(image, progress_bar, params)
+                staff_lines, staff_visualization, notes_visualization, all_notes = parse_music_sheet(image, progress_bar, params)
                 
-                col_visualization, col_results = st.columns(2)
+                col_staff_analysis, col_notes_analysis = st.columns(2)
                 
                 # Column 1: Staff Visualization
-                with col_visualization:
-                    st.subheader("Staff Line Detection")
-                    st.image(staff_visualization, caption="Detected Staff Lines")
+                with col_staff_analysis:
+                    st.subheader("Staff Lines Analysis")
+                    st.image(staff_visualization, caption="Staff Lines and Notes Detection")
                 
-                # Column 2: Parsing Results 
-                with col_results:
-                    st.subheader("Parsing Results")
-                    
-                    col_metrics1, col_metrics2 = st.columns(2)
-                    
-                    with col_metrics1:
-                        st.metric(
-                            label="Staff Lines Detected", 
-                            value=len(notes_visualization)
-                        )
-                    
-                    with col_metrics2:
-                        total_elements = sum(len(notes) for notes in all_notes)
-                        st.metric(
-                            label="Musical Elements Detected", 
-                            value=total_elements
-                        )
-                    
-                    for i, note_visualization in enumerate(notes_visualization):
-                        st.image(note_visualization, caption=f"Staff Line {i+1} Analysis")
+                # Column 2: Note detection results
+                with col_notes_analysis:
+                    st.subheader("Notes Detection Analysis")
+                    st.image(notes_visualization, caption="Notes Detection")
+                
+                st.markdown("---")   
+                _, col_metrics1, col_metrics2, col_metrics3, _= st.columns(5)
+                
+                with col_metrics1:
+                    st.metric(
+                        label="Staff Lines Detected", 
+                        value=len(staff_lines)
+                    )
+                
+                with col_metrics2:
+                    total_notes = sum(len(staff_notes) for staff_notes in all_notes)
+                    st.metric(
+                        label="Total Notes Detected", 
+                        value=total_notes
+                    )
+                
+                with col_metrics3:
+                    avg_notes_per_staff = round(total_notes / len(staff_lines), 1)
+                    st.metric(
+                        label="Avg. Notes per Staff", 
+                        value=avg_notes_per_staff
+                    )
                 
                 st.success("✨ Music sheet successfully parsed!")
 

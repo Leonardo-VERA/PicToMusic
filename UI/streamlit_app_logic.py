@@ -6,7 +6,6 @@ import cv2
 def parse_music_sheet(image, progress_bar, params=None):
     parser = PParser()
     total_progress = 0
-    
     progress_bar.progress(0)
     
     if params is None:
@@ -23,50 +22,59 @@ def parse_music_sheet(image, progress_bar, params=None):
         }
     
     image = parser.resize(image, max_dim=params['resize_max_dim'])
-    transformed_image = parser.invert_colors(image)
+    processed_image = parser.process_image(image)
     
-    # Detect staff lines
-    staff_line_contours = parser.find_contours(transformed_image, 
-                                       dilate_iterations=params['staff_dilate_iterations'], 
-                                       min_contour_area=params['staff_min_contour_area'], 
-                                       pad_size=params['staff_pad_size'])
+    staff_lines = parser.find_staff_lines(
+        dilate_iterations=params['staff_dilate_iterations'],
+        min_contour_area=params['staff_min_contour_area'],
+        pad_size=params['staff_pad_size']
+    )
     
-    staff_lines = parser.extract_contours(image, staff_line_contours, axis=1, full_height=False)
-    total_steps = len(staff_lines) + 1 
+    total_steps = len(staff_lines) + 1
     progress_increment = 100 / total_steps
-    
     total_progress += progress_increment
     progress_bar.progress(int(total_progress))
     
-    # Visualize the staff lines
-    staff_lines_visualization = parser.draw_contours(image.copy(), staff_line_contours)
-    cleaned_image = parser.remove_staff_lines(transformed_image)
+    staff_lines = parser.find_notes(
+        staff_lines,
+        dilate_iterations=params['note_dilate_iterations'],
+        min_contour_area=params['note_min_contour_area'],
+        pad_size=params['note_pad_size'],
+        max_horizontal_distance=params['max_horizontal_distance'],
+        overlap_threshold=params['overlap_threshold']
+    )
     
-    # Process each staff line
+    staff_visualization = parser.draw_staff_lines(
+        image.copy(), 
+        staff_lines,
+        show_staff_bounds=True,
+        show_staff_contours=True,
+        show_note_bounds=False,  # Don't show notes in staff visualization
+        show_note_contours=False
+    )
+    
+    notes_visualization = parser.draw_staff_lines(
+        image.copy(),
+        staff_lines,
+        show_staff_bounds=False,  # Don't show staff in notes visualization
+        show_staff_contours=False,
+        show_note_bounds=True,
+        show_note_contours=True
+    )
+    
+    # Extract note information
     all_notes = []
-    all_notes_visualization = []
-    for i, line in enumerate(staff_lines):
-        # Get the cleaned version of this line
-        cleaned_line = parser.extract_contours(cleaned_image, staff_line_contours, axis=1, full_height=False)[i]
-        
-        # Find note contours in this line
-        note_contours = parser.find_contours(cleaned_line, 
-                                        dilate_iterations=params['note_dilate_iterations'], 
-                                        min_contour_area=params['note_min_contour_area'], 
-                                        pad_size=params['note_pad_size'])
-        note_contours = parser.group_note_components(note_contours, max_horizontal_distance=params['max_horizontal_distance'], overlap_threshold=params['overlap_threshold'])
-        
-        # Extract individual notes
-        notes = parser.extract_contours(line, note_contours, axis=0, full_height=True)
-        all_notes.append(notes)
-        
-        # Visualize notes on this line
-        notes_visualization = parser.draw_contours(line.copy(), note_contours)
-        all_notes_visualization.append(notes_visualization)
-        # Update progress
-        total_progress += progress_increment
-        progress_bar.progress(int(total_progress))
+    for staff in staff_lines:
+        staff_notes = []
+        for note in staff.notes:
+            staff_notes.append({
+                'global_index': note.index,
+                'relative_index': note.relative_index,
+                'line_index': note.line_index,
+                'position': note.absolute_position
+            })
+        all_notes.append(staff_notes)
     
     progress_bar.progress(100)
     
-    return staff_lines_visualization, all_notes_visualization, all_notes
+    return staff_lines, staff_visualization, notes_visualization, all_notes
