@@ -5,18 +5,29 @@ from imutils import contours, perspective
 from PIL import Image
 import os
 from typing import List, Tuple, Optional, Union, Any
+from dataclasses import dataclass
+
+@dataclass
+class StaffLine:
+    """Represents a staff line and its associated notes in a music score."""
+    index: int 
+    line_contour: np.ndarray 
+    bounds: Tuple[int, int, int, int] 
+    notes: List['Note']  
+
+@dataclass
+class Note:
+    """Represents a musical element in the score."""
+    index: int
+    relative_index: int
+    line_index: int
+    contour: np.ndarray 
+    bounds: Tuple[int, int, int, int] 
+    relative_position: Tuple[int, int] 
+    absolute_position: Tuple[int, int] 
+    label: Optional[str] = None
 
 class PParser:
-    
-    def __init__(self):
-        self.image = np.ndarray
-        self.processed_image = np.ndarray
-        self.cleaned_image = np.ndarray
-        self.staff_line_contours = []
-        self.notes_contours_from_lines = []
-        self.notes_contours = []
-        self.original_shape = None
-        self.resized_shape = None
     
     def imread(self, path: str) -> np.ndarray:
         """
@@ -75,7 +86,7 @@ class PParser:
         
         Args:
             image (numpy.ndarray): The image to resize.
-            max_dim (int, optional): Maximum dimension (width or height) in pixels. Defaults to 1200.
+            max_dim (int, optional): Maximum dimension (width or height) in pixels.
             
         Returns:
             numpy.ndarray: The resized image.
@@ -121,9 +132,9 @@ class PParser:
         
         Args:
             image (numpy.ndarray): The input image.
-            dilate_iterations (int, optional): Number of dilation iterations to perform. Defaults to 3.
-            min_contour_area (int, optional): Minimum area for a contour to be included. Defaults to 0.
-            pad_size (int, optional): Padding to add around the image before processing. Defaults to 0.
+            dilate_iterations (int, optional): Number of dilation iterations to perform.
+            min_contour_area (int, optional): Minimum area for a contour to be included. 
+            pad_size (int, optional): Padding to add around the image before processing. 
             
         Returns:
             list: List of contours sorted from left to right.
@@ -151,128 +162,192 @@ class PParser:
         return cnts
     
     def find_staff_lines(self, dilate_iterations: int = 3, 
-                        min_contour_area: int = 10000, pad_size: int = 0) -> List[np.ndarray]:
+                        min_contour_area: int = 10000, pad_size: int = 0) -> List[StaffLine]:
+        """
+        Find and return staff lines with their properties.
+        
+        Returns:
+            List[StaffLine]: List of staff lines with their properties and empty note lists.
+        """
         self.staff_line_contours = self.find_contours(self.processed_image, dilate_iterations=dilate_iterations, 
                                       min_contour_area=min_contour_area, pad_size=pad_size)
-        return self.staff_line_contours
+        
+        staff_lines = []
+        for index, contour in enumerate(sorted(self.staff_line_contours, key=lambda c: cv2.boundingRect(c)[1])):
+            bounds = cv2.boundingRect(contour)
+            staff_lines.append(StaffLine(
+                index=index,
+                line_contour=contour,
+                bounds=bounds,
+                notes=[]
+            ))
+        
+        return staff_lines
     
-    def find_notes(self, dilate_iterations: int = 2, 
+    def find_notes(self, staff_lines: List[StaffLine], dilate_iterations: int = 2, 
                    min_contour_area: int = 50, pad_size: int = 0,
-                   max_horizontal_distance: int = 2, overlap_threshold: float = 0.2) -> List[List[np.ndarray]]:
+                   max_horizontal_distance: int = 2, overlap_threshold: float = 0.2) -> List[StaffLine]:
+        """
+        Find notes for each staff line and return structured data.
+        
+        Args:
+            staff_lines: List of staff lines to process
+            dilate_iterations: Number of dilation iterations for contour detection
+            min_contour_area: Minimum area for a contour to be considered
+            pad_size: Padding around the image
+            max_horizontal_distance: Maximum distance for grouping note components
+            overlap_threshold: Threshold for considering components as overlapping
+        
+        Returns:
+            List[StaffLine]: List of staff lines with their associated notes.
+        """
         self.cleaned_image = self.remove_staff_lines(self.processed_image)
-        lines = self.extract_contours(self.cleaned_image, self.staff_line_contours, axis=1, full_height=False)
+        global_index = 0
         
-        self.notes_contours_from_lines = []
-        for line in lines:
-            note_contours = self.find_contours(line, dilate_iterations=dilate_iterations, 
-                                          min_contour_area=min_contour_area, pad_size=pad_size)
-            note_contours = self.group_note_components(note_contours, 
-                                                max_horizontal_distance=max_horizontal_distance, 
-                                                overlap_threshold=overlap_threshold)
-            self.notes_contours_from_lines.append(note_contours)
-
-        self.notes_contours = []
-        sorted_staff_contours = sorted(self.staff_line_contours, key=lambda c: cv2.boundingRect(c)[1])
-        for staff_contour, line_note_contours in zip(sorted_staff_contours, self.notes_contours_from_lines):
-            staff_x, staff_y, staff_w, staff_h = cv2.boundingRect(staff_contour)
+        for line_index, staff_line in enumerate(staff_lines):
+            x, y, w, h = staff_line.bounds
+            line_image = self.cleaned_image[y:y+h, x:x+w]
             
-            adjusted_staff_contours = []
-            for note_contour in line_note_contours:
+            note_contours = self.find_contours(line_image, 
+                                             dilate_iterations=dilate_iterations,
+                                             min_contour_area=min_contour_area, 
+                                             pad_size=pad_size)
+            
+            note_contours = self.group_note_components(note_contours,
+                                                     max_horizontal_distance=max_horizontal_distance,
+                                                     overlap_threshold=overlap_threshold)
+            
+            note_contours = sorted(note_contours, 
+                                 key=lambda c: cv2.boundingRect(c)[0])
+            
+            for relative_index, note_contour in enumerate(note_contours):
+                note_bounds = cv2.boundingRect(note_contour)
+                relative_pos = (note_bounds[0], note_bounds[1])
+                absolute_pos = (x + note_bounds[0], y + note_bounds[1])
+
                 adjusted_contour = note_contour.copy()
-                adjusted_contour[:, :, 0] += staff_x
-                adjusted_contour[:, :, 1] += staff_y   
-                adjusted_staff_contours.append(adjusted_contour)
+                adjusted_contour[:, :, 0] += x
+                adjusted_contour[:, :, 1] += y
+                
+                note = Note(
+                    index=global_index,          
+                    relative_index=relative_index,  
+                    line_index=line_index,          
+                    contour=adjusted_contour,
+                    bounds=(note_bounds[0] + x, note_bounds[1] + y, note_bounds[2], note_bounds[3]),
+                    relative_position=relative_pos,
+                    absolute_position=absolute_pos
+                )
+                staff_line.notes.append(note)
+                global_index += 1
         
-            self.notes_contours.append(adjusted_staff_contours)
+        self.notes_contours = [[note.contour for note in staff.notes] for staff in staff_lines]
         
-        return self.notes_contours
-        
+        return staff_lines
+    
     def group_note_components(self, contours: List[np.ndarray], 
                              max_horizontal_distance: int = 10,
                              overlap_threshold: float = 0.8) -> List[np.ndarray]:
         """
-        Group contours that likely belong to the same musical note based on horizontal proximity
-        and containment.
+        Group contours that likely belong to the same musical note based on horizontal proximity,
+        vertical overlap, and containment in a single pass.
         
         Args:
             contours (list): List of contours to group.
-            max_horizontal_distance (int, optional): Maximum horizontal distance between 
-                                                    contours to be considered part of the same group.
-                                                    Defaults to 10.
-            overlap_threshold (float, optional): Minimum overlap ratio to consider a contour as
-                                               contained within another.
+            max_horizontal_distance (int): Maximum horizontal distance between 
+                                        contours to be considered part of the same group.
+            overlap_threshold (float): Minimum overlap ratio to consider a contour as
+                                     contained within another.
             
         Returns:
             list: List of merged contours where each group is represented as a single contour.
         """
         if not contours:
             return []
-        
-        def calculate_overlap(rect1, rect2):
-            """Calculate the overlap ratio between two rectangles."""
-            x1, y1, w1, h1 = rect1
-            x2, y2, w2, h2 = rect2
-            
-            x_left = max(x1, x2)
-            y_top = max(y1, y2)
-            x_right = min(x1 + w1, x2 + w2)
-            y_bottom = min(y1 + h1, y2 + h2)
-            
-            if x_right < x_left or y_bottom < y_top:
-                return 0.0
-                
-            intersection_area = (x_right - x_left) * (y_bottom - y_top)
-            smaller_area = min(w1 * h1, w2 * h2)
-            
-            return intersection_area / smaller_area if smaller_area > 0 else 0.0
-        
+
+        sorted_contours = sorted(contours, key=lambda c: cv2.boundingRect(c)[0])
         groups = []
-        used_contours = set()
+        current_group = []
         
-        for i, cnt1 in enumerate(contours):
-            if i in used_contours:
+        for contour in sorted_contours:
+            rect = cv2.boundingRect(contour)
+            x, y, w, h = rect
+            
+            if not current_group:
+                current_group = [(contour, rect)]
                 continue
-                
-            current_group = [cnt1]
-            rect1 = cv2.boundingRect(cnt1)
             
-            for j, cnt2 in enumerate(contours[i+1:], start=i+1):
-                if j in used_contours:
-                    continue
+            last_x = current_group[-1][1][0] + current_group[-1][1][2]  
+
+            horizontal_dist = x - last_x
+            
+            if horizontal_dist > max_horizontal_distance:
+                if current_group:
+                    groups.append(self.__merge_group(current_group))
+                current_group = [(contour, rect)]
+                continue
+            
+            should_merge = False
+            for group_contour, group_rect in current_group:
+                gx, gy, gw, gh = group_rect
+                
+                vertical_overlap = (y <= gy + gh) and (gy <= y + h)
+                
+                if vertical_overlap:
+                    x_left = max(x, gx)
+                    y_top = max(y, gy)
+                    x_right = min(x + w, gx + gw)
+                    y_bottom = min(y + h, gy + gh)
                     
-                rect2 = cv2.boundingRect(cnt2)
-                overlap_ratio = calculate_overlap(rect1, rect2)
-                
-                x1, y1, w1, h1 = rect1
-                x2, y2, w2, h2 = rect2
-                horizontal_close = abs((x1 + w1) - x2) < max_horizontal_distance
-                
-                if horizontal_close or overlap_ratio > overlap_threshold:
-                    current_group.append(cnt2)
-                    used_contours.add(j)
+                    if x_right >= x_left and y_bottom >= y_top:
+                        intersection_area = (x_right - x_left) * (y_bottom - y_top)
+                        area1 = w * h
+                        area2 = gw * gh
+                        
+                        ratio1 = intersection_area / area1 if area1 > 0 else 0
+                        ratio2 = intersection_area / area2 if area2 > 0 else 0
+                        max_ratio = max(ratio1, ratio2)
+                        
+                        if max_ratio > overlap_threshold or horizontal_dist <= max_horizontal_distance:
+                            should_merge = True
+                            break
             
-            used_contours.add(i)
-            groups.append(current_group)
-        
-        merged_contours = []
-        for group in groups:
-            if len(group) == 1:
-                merged_contours.append(group[0])
+            if should_merge:
+                current_group.append((contour, rect))
             else:
-                x_min = min(cv2.boundingRect(c)[0] for c in group)
-                y_min = min(cv2.boundingRect(c)[1] for c in group)
-                x_max = max(cv2.boundingRect(c)[0] + cv2.boundingRect(c)[2] for c in group)
-                y_max = max(cv2.boundingRect(c)[1] + cv2.boundingRect(c)[3] for c in group)
-                
-                rect = np.array([[
-                    [x_min, y_min],
-                    [x_max, y_min],
-                    [x_max, y_max],
-                    [x_min, y_max]
-                ]], dtype=np.int32)
-                merged_contours.append(rect)
+                if current_group:
+                    groups.append(self.__merge_group(current_group))
+                current_group = [(contour, rect)]
         
-        return sorted(merged_contours, key=lambda c: cv2.boundingRect(c)[0])
+        if current_group:
+            groups.append(self.__merge_group(current_group))
+        
+        return groups
+
+    def __merge_group(self, group: List[Tuple[np.ndarray, Tuple[int, int, int, int]]]) -> np.ndarray:
+        """
+        Merge a group of contours into a single contour.
+        
+        Args:
+            group: List of tuples containing (contour, bounding_rect)
+            
+        Returns:
+            np.ndarray: Merged contour
+        """
+        if len(group) == 1:
+            return group[0][0]
+        
+        x_min = min(rect[0] for _, rect in group)
+        y_min = min(rect[1] for _, rect in group)
+        x_max = max(rect[0] + rect[2] for _, rect in group)
+        y_max = max(rect[1] + rect[3] for _, rect in group)
+        
+        return np.array([
+            [[x_min, y_min]],
+            [[x_max, y_min]],
+            [[x_max, y_max]],
+            [[x_min, y_max]]
+        ], dtype=np.int32)
     
     def _add_padding(self, image: np.ndarray, pad_size: int = 0) -> np.ndarray:
         """
@@ -306,25 +381,23 @@ class PParser:
         Args:
             original_image (numpy.ndarray): The image to draw on.
             cnts (list): List of contours to draw.
-            color (tuple, optional): BGR color for the contour lines. Defaults to (0, 255, 0).
-            thickness (int, optional): Thickness of the contour lines. Defaults to 2.
+            color (tuple, optional): BGR color for the contour lines.   
+            thickness (int, optional): Thickness of the contour lines. 
+            show_midpoints (bool, optional): Whether to show midpoints.
             
         Returns:
             numpy.ndarray: Image with drawn contours and annotations.
         """
         orig = image.copy()
         for c in cnts:
-            # Get the minimum area rectangle
             box = cv2.minAreaRect(c)
             box = cv2.cv.BoxPoints(box) if imutils.is_cv2() else cv2.boxPoints(box)
             box = np.array(box, dtype="int")
             box = perspective.order_points(box)
             
-            # Draw all elements in one pass
             cv2.drawContours(orig, [box.astype("int")], -1, color, thickness)
             
             if show_midpoints:
-                # Calculate all midpoints 
                 tl, tr, br, bl = box
                 midpoints = [
                     self.__mid_point(tl, tr),  # top
@@ -333,11 +406,9 @@ class PParser:
                     self.__mid_point(tr, br)   # right
                 ]
                 
-                # Draw all circles and lines in batch
                 for point in midpoints:
                     cv2.circle(orig, (int(point[0]), int(point[1])), 5, (255, 0, 0), -1)
                 
-                # Draw cross lines
                 cv2.line(orig, (int(midpoints[0][0]), int(midpoints[0][1])),
                         (int(midpoints[1][0]), int(midpoints[1][1])), (255, 0, 255), 2)
                 cv2.line(orig, (int(midpoints[2][0]), int(midpoints[2][1])),
@@ -355,7 +426,6 @@ class PParser:
             contours (list): List of contours to extract.
             axis (int): Sorting axis - 0 for horizontal (left to right), 1 for vertical (top to bottom).
             full_height (bool, optional): Whether to extract the full height of the image for each contour.
-                                         Defaults to False.
             
         Returns:
             list: List of image regions corresponding to each contour.
@@ -396,3 +466,46 @@ class PParser:
         detected_lines = cv2.morphologyEx(image, cv2.MORPH_OPEN, horizontal_kernel, iterations=3)
         thresh = cv2.subtract(image, detected_lines)
         return thresh
+
+    def draw_staff_lines(self, image: np.ndarray, staff_lines: List[StaffLine],
+                        show_staff_bounds: bool = True,
+                        show_note_bounds: bool = True,
+                        show_staff_contours: bool = True,
+                        show_note_contours: bool = True) -> np.ndarray:
+        """
+        Draw staff lines and their notes on the image.
+        
+        Args:
+            image: The image to draw on
+            staff_lines: List of staff lines objectsto draw
+            OPTIONAL : 
+                show_staff_bounds: Whether to show staff bounding boxes
+                show_note_bounds: Whether to show note bounding boxes
+                show_staff_contours: Whether to show staff contours
+                show_note_contours: Whether to show note contours.
+                
+        Returns:
+            numpy.ndarray: Image with staff lines and notes
+        """
+        result = image.copy()
+        
+        for staff in staff_lines:
+            # Staff line
+            if show_staff_bounds:
+                x, y, w, h = staff.bounds
+                cv2.rectangle(result, (x, y), (x + w, y + h), (0, 255, 0), 2)  # Green
+            
+            if show_staff_contours:
+                cv2.drawContours(result, [staff.line_contour], -1, (0, 255, 0), 1)  # Green
+            
+            # Notes
+            for note in staff.notes:
+                
+                if show_note_bounds:
+                    x, y, w, h = note.bounds
+                    cv2.rectangle(result, (x, y), (x + w, y + h), (255, 0, 0), 2)  # Blue
+                    
+                if show_note_contours:
+                    cv2.drawContours(result, [note.contour], -1, (0, 0, 255), 1)  # Red
+        
+        return result
