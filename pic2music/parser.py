@@ -8,6 +8,16 @@ from typing import List, Tuple, Optional, Union, Any
 
 class PParser:
     
+    def __init__(self):
+        self.image = np.ndarray
+        self.processed_image = np.ndarray
+        self.cleaned_image = np.ndarray
+        self.staff_line_contours = []
+        self.notes_contours_from_lines = []
+        self.notes_contours = []
+        self.original_shape = None
+        self.resized_shape = None
+    
     def imread(self, path: str) -> np.ndarray:
         """
         Load an image from a file path.
@@ -18,7 +28,8 @@ class PParser:
         Returns:
             numpy.ndarray: The loaded image in BGR format.
         """
-        return cv2.imread(path)
+        self.image = cv2.imread(path)
+        return self.image
     
     def imwrite(self, path: str, image: np.ndarray, overwrite: bool = False) -> bool:
         """
@@ -85,10 +96,10 @@ class PParser:
             new_height = int(height * (max_dim / width))
             
         self.resized_shape = (new_width, new_height)
-        
-        return cv2.resize(image, (new_width, new_height))
+        self.image = cv2.resize(image, (new_width, new_height))
+        return self.image
 
-    def invert_colors(self, image: np.ndarray) -> np.ndarray:
+    def process_image(self, image: np.ndarray) -> np.ndarray:
         """
         Invert the colors of an image. Converts to grayscale if the image is in color.
         
@@ -100,7 +111,8 @@ class PParser:
         """
         if len(image.shape) == 3:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        return cv2.bitwise_not(image)
+        self.processed_image = cv2.bitwise_not(image)
+        return self.processed_image
     
     def find_contours(self, image: np.ndarray, dilate_iterations: int = 3, 
                       min_contour_area: int = 0, pad_size: int = 0) -> List[np.ndarray]:
@@ -138,6 +150,43 @@ class PParser:
         
         return cnts
     
+    def find_staff_lines(self, dilate_iterations: int = 3, 
+                        min_contour_area: int = 10000, pad_size: int = 0) -> List[np.ndarray]:
+        self.staff_line_contours = self.find_contours(self.processed_image, dilate_iterations=dilate_iterations, 
+                                      min_contour_area=min_contour_area, pad_size=pad_size)
+        return self.staff_line_contours
+    
+    def find_notes(self, dilate_iterations: int = 2, 
+                   min_contour_area: int = 50, pad_size: int = 0,
+                   max_horizontal_distance: int = 2, overlap_threshold: float = 0.2) -> List[List[np.ndarray]]:
+        self.cleaned_image = self.remove_staff_lines(self.processed_image)
+        lines = self.extract_contours(self.cleaned_image, self.staff_line_contours, axis=1, full_height=False)
+        
+        self.notes_contours_from_lines = []
+        for line in lines:
+            note_contours = self.find_contours(line, dilate_iterations=dilate_iterations, 
+                                          min_contour_area=min_contour_area, pad_size=pad_size)
+            note_contours = self.group_note_components(note_contours, 
+                                                max_horizontal_distance=max_horizontal_distance, 
+                                                overlap_threshold=overlap_threshold)
+            self.notes_contours_from_lines.append(note_contours)
+
+        self.notes_contours = []
+        sorted_staff_contours = sorted(self.staff_line_contours, key=lambda c: cv2.boundingRect(c)[1])
+        for staff_contour, line_note_contours in zip(sorted_staff_contours, self.notes_contours_from_lines):
+            staff_x, staff_y, staff_w, staff_h = cv2.boundingRect(staff_contour)
+            
+            adjusted_staff_contours = []
+            for note_contour in line_note_contours:
+                adjusted_contour = note_contour.copy()
+                adjusted_contour[:, :, 0] += staff_x
+                adjusted_contour[:, :, 1] += staff_y   
+                adjusted_staff_contours.append(adjusted_contour)
+        
+            self.notes_contours.append(adjusted_staff_contours)
+        
+        return self.notes_contours
+        
     def group_note_components(self, contours: List[np.ndarray], 
                              max_horizontal_distance: int = 10,
                              overlap_threshold: float = 0.8) -> List[np.ndarray]:
@@ -249,7 +298,7 @@ class PParser:
     def __mid_point(self, ptA, ptB):
         return ((ptA[0] + ptB[0]) / 2, (ptA[1] + ptB[1]) / 2)
 
-    def draw_contours(self, original_image: np.ndarray, cnts: List[np.ndarray], 
+    def draw_contours(self, image: np.ndarray, cnts: List[np.ndarray], 
                      color: Tuple[int, int, int] = (0, 255, 0), thickness: int = 2, show_midpoints: bool = False) -> np.ndarray:
         """
         Draw contours on an image with bounding boxes, midpoints, and cross lines.
@@ -263,7 +312,7 @@ class PParser:
         Returns:
             numpy.ndarray: Image with drawn contours and annotations.
         """
-        orig = original_image.copy()
+        orig = image.copy()
         for c in cnts:
             # Get the minimum area rectangle
             box = cv2.minAreaRect(c)
