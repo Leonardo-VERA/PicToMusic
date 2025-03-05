@@ -12,8 +12,21 @@ class StaffLine:
     """Represents a staff line and its associated notes in a music score."""
     index: int 
     line_contour: np.ndarray 
-    bounds: Tuple[int, int, int, int] 
+    bounds: Tuple[int, int, int, int]
     notes: List['Note']  
+    key: Optional['Key'] = None
+    
+@dataclass
+class Key:
+    """Represents a key signature in a music score."""
+    line_index: int
+    contour: np.ndarray
+    bounds: Tuple[int, int, int, int]
+    relative_position: Tuple[int, int] 
+    absolute_position: Tuple[int, int] 
+    label: Optional[str] = None
+    gamme: Optional[str] = None
+    metric: Optional[Tuple[int, int]] = (4, 4)
 
 @dataclass
 class Note:
@@ -229,15 +242,26 @@ class PParser:
                 adjusted_contour[:, :, 0] += x
                 adjusted_contour[:, :, 1] += y
                 
-                note = Note(
-                    index=global_index,          
-                    relative_index=relative_index,  
-                    line_index=line_index,          
-                    contour=adjusted_contour,
-                    bounds=(note_bounds[0] + x, note_bounds[1] + y, note_bounds[2], note_bounds[3]),
-                    relative_position=relative_pos,
-                    absolute_position=absolute_pos
-                )
+                if relative_index == 0:
+                    key = Key(
+                        line_index=line_index,
+                        contour=adjusted_contour,
+                        bounds=(note_bounds[0] + x, note_bounds[1] + y, note_bounds[2], note_bounds[3]),
+                        relative_position=relative_pos,
+                        absolute_position=absolute_pos
+                    )
+                    staff_line.key = key
+                    continue
+                else : 
+                    note = Note(
+                        index=global_index,          
+                        relative_index=relative_index,  
+                        line_index=line_index,          
+                        contour=adjusted_contour,
+                        bounds=(note_bounds[0] + x, note_bounds[1] + y, note_bounds[2], note_bounds[3]),
+                        relative_position=relative_pos,
+                        absolute_position=absolute_pos
+                    )
                 staff_line.notes.append(note)
                 global_index += 1
         
@@ -470,8 +494,10 @@ class PParser:
     def draw_staff_lines(self, image: np.ndarray, staff_lines: List[StaffLine],
                         show_staff_bounds: bool = True,
                         show_note_bounds: bool = True,
+                        show_key_bounds: bool = True,
                         show_staff_contours: bool = True,
-                        show_note_contours: bool = True) -> np.ndarray:
+                        show_note_contours: bool = True,
+                        show_key_contours: bool = True) -> np.ndarray:
         """
         Draw staff lines and their notes on the image.
         
@@ -481,8 +507,10 @@ class PParser:
             OPTIONAL : 
                 show_staff_bounds: Whether to show staff bounding boxes
                 show_note_bounds: Whether to show note bounding boxes
+                show_key_bounds: Whether to show key bounding boxes
                 show_staff_contours: Whether to show staff contours
                 show_note_contours: Whether to show note contours.
+                show_key_contours: Whether to show key contours.
                 
         Returns:
             numpy.ndarray: Image with staff lines and notes
@@ -498,12 +526,22 @@ class PParser:
             if show_staff_contours:
                 cv2.drawContours(result, [staff.line_contour], -1, (0, 255, 0), 1)  # Green
             
+            # Key
+            if staff.key:
+                if show_key_bounds:
+                    x, y, w, h = staff.key.bounds
+                    cv2.rectangle(result, (x, y), (x + w, y + h), (150, 0, 150), 2)  # Violet
+                
+                if show_key_contours:   
+                    cv2.drawContours(result, [staff.key.contour], -1, (150, 0, 150), 1)  # Violet
+            
             # Notes
             for note in staff.notes:
                 
                 if show_note_bounds:
                     x, y, w, h = note.bounds
                     cv2.rectangle(result, (x, y), (x + w, y + h), (255, 0, 0), 2)  # Blue
+                    cv2.putText(result, str(note.index), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
                     
                 if show_note_contours:
                     cv2.drawContours(result, [note.contour], -1, (0, 0, 255), 1)  # Red
