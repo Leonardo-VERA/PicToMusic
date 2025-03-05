@@ -49,17 +49,21 @@ def parse_music_sheet(image, progress_bar, params=None):
         staff_lines,
         show_staff_bounds=True,
         show_staff_contours=True,
-        show_note_bounds=False,  # Don't show notes in staff visualization
-        show_note_contours=False
+        show_note_bounds=False,
+        show_note_contours=False,
+        show_key_bounds=False,
+        show_key_contours=False
     )
     
     notes_visualization = parser.draw_staff_lines(
         image.copy(),
         staff_lines,
-        show_staff_bounds=False,  # Don't show staff in notes visualization
+        show_staff_bounds=False,
         show_staff_contours=False,
         show_note_bounds=True,
-        show_note_contours=True
+        show_note_contours=True,
+        show_key_bounds=True,
+        show_key_contours=True
     )
     
     # Extract note information
