@@ -1,49 +1,239 @@
-# PicToMusic
+# 🎼 PicToMusic: Sheet Music to MIDI Converter
 
-## Roadmap du Projet
+PicToMusic is an advanced computer vision application that transforms sheet music into playable MIDI files. Using state-of-the-art image processing and deep learning techniques, it detects and interprets musical notation from both digital images and camera captures.
 
-### 1. Capture d'Image et Prétraitement
-- **Technologie**: OpenCV
-- **Fonctionnalités**:
-  - Capturer des images depuis une webcam.
-  - Prétraiter l'image (désinclinaison, amélioration du contraste, seuillage).
-  - Détecter les contours de la partition.
+## 🎯 Project Overview
 
-### 2. Prétraitement
-- Découper la capture en rectangles et traiter chaque rectangle individuellement.
+1. **Optical Music Recognition (OMR)**
+   - Advanced image processing for staff line and note detection
+   - Robust handling of various sheet music formats and qualities
+   - Real-time processing capabilities
 
-### 3. Reconnaissance des Notes et du Rythme (OMR - Optical Music Recognition)
-- **Technologies**:
-  - **Audiveris**: Logiciel open-source spécialisé dans l'OMR pour convertir les images de partitions en fichiers MusicXML ou MIDI.
-  - **Alternatives**: 
-    - Utiliser un modèle de deep learning personnalisé avec TensorFlow/Keras, entraîné sur des datasets de partitions (ex: MuseScore).
-    - **Object Detection**: Utiliser YOLO ou Detectron2 pour détecter les symboles musicaux (clés de sol, notes, silences) dans une approche DIY.
-    - **Dataset**: DeepSheet (images annotées de partitions).
+2. **Musical Symbol Recognition**
+   - CRNN (Convolutional Recurrent Neural Network) trained on 40,000+ music sheets
+   - Accurate detection of notes, clefs, time signatures, and other musical symbols
+   - Sophisticated handling of musical notation complexities
 
-### 4. Traitement des Données Musicales
-- **Technologie**: Music21
-- **Fonctionnalités**:
-  - Analyser les fichiers MusicXML/MIDI.
-  - Extraire les notes, durées, tempo, etc.
+3. **Digital Music Generation**
+   - Conversion to ABC notation format
+   - MIDI file generation for playback
+   - Support for various musical instruments and styles
 
-### 5. Synthèse Sonore en Temps Réel
-- **Technologies**:
-  - **FluidSynth + SoundFonts**: Jouer les notes en direct avec un instrument réaliste (piano, guitare, etc.).
-  - **RtMidi**: Bibliothèque C++ avec bindings Python pour une gestion en temps réel du MIDI, assurant une latence ultra-faible.
+## 🔬 Technical Implementation
 
-## Phases de Développement
-- **Implémentation Grossière**: 
-  - Développer une version initiale de la solution avec les fonctionnalités de base.
-  - Tester les flux de travail principaux pour s'assurer que chaque composant fonctionne ensemble.
+### Image Processing Pipeline
 
-- **Raffinement et Optimisation**: 
-  - Améliorer les algorithmes de traitement d'image et de reconnaissance musicale.
-  - Optimiser les performances pour réduire la latence et améliorer la précision.
-  - Effectuer des tests utilisateurs pour recueillir des retours et ajuster les fonctionnalités.
+```
+┌─────────────────┐
+│   Sheet Music   │
+│     Image       │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐      ┌───────────────────┐
+│  Preprocessing  │      │   Image Quality   │
+│  • Grayscale    ├─────►│   Enhancement     │
+│  • Thresholding │      │   • Noise removal │
+└────────┬────────┘      │   • Contrast adj. │
+         │               └─────────┬─────────┘
+         ▼                         │
+    ┌────┴─────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────┐
+│        Parallel Processing          │
+│                                     │
+│    ┌───────────┐      ┌──────────┐  │
+│    │Staff Line │      │  Note    │  │
+│    │Detection  │      │Detection │  │
+│    └─────┬─────┘      └────┬─────┘  │
+│          │                 │        │
+└──────────┼─────────────────┼────────┘
+           │                 │
+           └──────┐     ┌────┘
+                  │     │
+                  ▼     ▼
+         ┌─────────────────────┐
+         │Symbol Segmentation  │
+         │  • Position Data    │
+         │  • Relative Spacing │
+         └──────────┬──────────┘
+                    │
+                    ▼
+         ┌─────────────────────┐
+         │   CRNN Model        │
+         │ ┌───────────────┐   │
+         │ │ CNN Feature   │   │
+         │ │ Extraction    │   │
+         │ └───────┬───────┘   │
+         │         ▼           │
+         │ ┌───────────────┐   │
+         │ │ LSTM Sequence │   │
+         │ │ Learning      │   │
+         │ └───────────────┘   │
+         └──────────┬──────────┘
+                    │
+                    ▼
+         ┌─────────────────────┐
+         │   ABC Notation      │
+         │   Generation        │
+         └──────────┬──────────┘
+                    │
+                    ▼
+         ┌─────────────────────┐
+         │   MIDI Output       │
+         │   Generation        │
+         └─────────────────────┘
+```
 
-- **Portage sur Mobile**: 
-  - Explorer les options pour porter l'application sur des plateformes mobiles en privilégiant les solutions Python :
-    - **Kivy**: Framework Python pour le développement d'applications multiplateformes, y compris Android et iOS.
-    - **BeeWare**: Outils pour créer des applications natives en Python pour différentes plateformes, y compris mobile.
-    - **PyQt/PySide**: Pour créer des applications avec une interface graphique qui peuvent être adaptées pour mobile, bien que cela nécessite des ajustements supplémentaires.
-  - Adapter les fonctionnalités pour une utilisation mobile, en tenant compte des limitations de performance et d'interface.
+### Core Components
+
+#### Optical Music Recognition (OMR)
+
+1. **Image Preprocessing**
+   ```python
+   def process_image(image):
+       # Convert to grayscale
+       # Invert colors
+       # Apply adaptive thresholding
+   ```
+
+2. **Staff Line Detection**
+   ```python
+   def find_staff_lines(image):
+       # Detect horizontal lines
+       # Group into staff systems
+       # Extract staff properties
+   ```
+
+3. **Note Detection**
+   ```python
+   def find_notes(staff_lines):
+       # Remove staff lines
+       # Detect note components
+       # Group related elements
+   ```
+
+#### Musical Symbol Recognition
+
+(IN PROGRESS)
+
+#### Digital Music Generation
+
+(IN PROGRESS)
+
+### Data Structures
+
+```python
+@dataclass
+class StaffLine:
+    index: int
+    line_contour: np.ndarray
+    bounds: Tuple[int, int, int, int]
+    notes: List[Note]
+    key: Optional[Key]
+
+@dataclass
+class Note:
+    index: int
+    relative_index: int
+    line_index: int
+    contour: np.ndarray
+    bounds: Tuple[int, int, int, int]
+    relative_position: Tuple[int, int]
+    absolute_position: Tuple[int, int]
+    label: Optional[str]
+```
+
+## 🛠️ Current Implementation Status
+
+### Completed Features
+- ✅ Basic image preprocessing and enhancement
+- ✅ Staff line detection and segmentation
+- ✅ Note component detection and grouping
+- ✅ Interactive web interface with Streamlit
+
+### In Development
+- 🔄 CRNN model integration for symbol recognition
+- 🔄 ABC notation converter
+- 🔄 MIDI generation system
+
+### Future Enhancements
+- 📋 Support for complex musical notations
+- 📋 Real-time audio preview
+- 📋 Mobile application development
+- 📋 Batch processing capabilities
+- 📋 Cloud-based processing option
+
+## 🔧 Installation & Setup
+
+1. Clone the repository:
+```bash
+git clone https://github.com/AugustinMORVAL/PicToMusic
+cd PicToMusic
+```
+
+2. Create and activate a virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+## 💻 Usage
+
+1. Start the web interface:
+```bash
+streamlit run app.py
+```
+
+2. Upload or capture sheet music:
+   - Support for PNG, JPG, JPEG formats
+   - Real-time camera capture available
+   - Automatic image enhancement
+
+3. Configure processing parameters:
+   - Image resolution (default: 1200px max dimension)
+   - Staff line detection sensitivity
+   - Note detection parameters
+
+4. Process and generate output:
+   - Visual feedback of detection results
+   - ABC notation preview
+   - MIDI file download
+
+## 🔍 Technical Details
+
+### Image Processing Parameters
+
+| Parameter | Description | Default | Range |
+|-----------|-------------|---------|--------|
+| Image Resolution | Max dimension | 1200px | 800-2000px |
+| Staff Line Dilation | Line detection sensitivity | 3 | 1-10 |
+| Note Dilation | Note detection sensitivity | 2 | 1-10 |
+| Min Staff Area | Minimum staff line size | 10000 | 1000-20000 |
+| Min Note Area | Minimum note size | 50 | 10-1000 |
+| Overlap Threshold | Component grouping threshold | 0.5 | 0.1-0.9 |
+
+### CRNN Model Architecture
+
+- **Input**: Preprocessed image segments
+- **Backbone**: ResNet-based feature extraction
+- **Sequence Learning**: Bi-directional LSTM
+- **Output**: Musical symbol classification
+- **Training Data**: 40,000+ annotated sheet music samples
+
+## 📚 Resources
+
+- [OpenCV Documentation](https://docs.opencv.org/)
+- [Music21 Documentation](http://web.mit.edu/music21/doc/)
+- [ABC Notation Guide](http://abcnotation.com/wiki/abc:standard)
+- [MIDI File Format Specification](https://www.midi.org/specifications)
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
