@@ -218,8 +218,15 @@ class PParser:
         global_index = 0
         
         for line_index, staff_line in enumerate(staff_lines):
-            x, y, w, h = staff_line.bounds
-            line_image = self.cleaned_image[y:y+h, x:x+w]
+
+            mask = np.zeros(self.cleaned_image.shape[:2], dtype=np.uint8)
+            cv2.drawContours(mask, [staff_line.line_contour], -1, (255), -1)
+            
+            x, y, w, h = cv2.boundingRect(staff_line.line_contour)
+            
+            line_image = cv2.bitwise_and(self.cleaned_image[y:y+h, x:x+w], 
+                                       self.cleaned_image[y:y+h, x:x+w], 
+                                       mask=mask[y:y+h, x:x+w])
             
             note_contours = self.find_contours(line_image, 
                                              dilate_iterations=dilate_iterations,
@@ -242,26 +249,15 @@ class PParser:
                 adjusted_contour[:, :, 0] += x
                 adjusted_contour[:, :, 1] += y
                 
-                if relative_index == 0:
-                    key = Key(
-                        line_index=line_index,
-                        contour=adjusted_contour,
-                        bounds=(note_bounds[0] + x, note_bounds[1] + y, note_bounds[2], note_bounds[3]),
-                        relative_position=relative_pos,
-                        absolute_position=absolute_pos
-                    )
-                    staff_line.key = key
-                    continue
-                else : 
-                    note = Note(
-                        index=global_index,          
-                        relative_index=relative_index,  
-                        line_index=line_index,          
-                        contour=adjusted_contour,
-                        bounds=(note_bounds[0] + x, note_bounds[1] + y, note_bounds[2], note_bounds[3]),
-                        relative_position=relative_pos,
-                        absolute_position=absolute_pos
-                    )
+                note = Note(
+                    index=global_index,          
+                    relative_index=relative_index,  
+                    line_index=line_index,          
+                    contour=adjusted_contour,
+                    bounds=(note_bounds[0] + x, note_bounds[1] + y, note_bounds[2], note_bounds[3]),
+                    relative_position=relative_pos,
+                    absolute_position=absolute_pos
+                )
                 staff_line.notes.append(note)
                 global_index += 1
         
@@ -494,10 +490,8 @@ class PParser:
     def draw_staff_lines(self, image: np.ndarray, staff_lines: List[StaffLine],
                         show_staff_bounds: bool = True,
                         show_note_bounds: bool = True,
-                        show_key_bounds: bool = True,
                         show_staff_contours: bool = True,
-                        show_note_contours: bool = True,
-                        show_key_contours: bool = True) -> np.ndarray:
+                        show_note_contours: bool = True) -> np.ndarray:
         """
         Draw staff lines and their notes on the image.
         
@@ -507,10 +501,8 @@ class PParser:
             OPTIONAL : 
                 show_staff_bounds: Whether to show staff bounding boxes
                 show_note_bounds: Whether to show note bounding boxes
-                show_key_bounds: Whether to show key bounding boxes
                 show_staff_contours: Whether to show staff contours
                 show_note_contours: Whether to show note contours.
-                show_key_contours: Whether to show key contours.
                 
         Returns:
             numpy.ndarray: Image with staff lines and notes
@@ -525,15 +517,6 @@ class PParser:
             
             if show_staff_contours:
                 cv2.drawContours(result, [staff.line_contour], -1, (0, 255, 0), 1)  # Green
-            
-            # Key
-            if staff.key:
-                if show_key_bounds:
-                    x, y, w, h = staff.key.bounds
-                    cv2.rectangle(result, (x, y), (x + w, y + h), (150, 0, 150), 2)  # Violet
-                
-                if show_key_contours:   
-                    cv2.drawContours(result, [staff.key.contour], -1, (150, 0, 150), 1)  # Violet
             
             # Notes
             for note in staff.notes:
