@@ -5,40 +5,7 @@ from imutils import contours, perspective
 from PIL import Image
 import os
 from typing import List, Tuple, Optional, Union, Any
-from dataclasses import dataclass
-
-@dataclass
-class StaffLine:
-    """Represents a staff line and its associated notes in a music score."""
-    index: int 
-    line_contour: np.ndarray 
-    bounds: Tuple[int, int, int, int]
-    notes: List['Note']  
-    key: Optional['Key'] = None
-    
-@dataclass
-class Key:
-    """Represents a key signature in a music score."""
-    line_index: int
-    contour: np.ndarray
-    bounds: Tuple[int, int, int, int]
-    relative_position: Tuple[int, int] 
-    absolute_position: Tuple[int, int] 
-    label: Optional[str] = None
-    gamme: Optional[str] = None
-    metric: Optional[Tuple[int, int]] = (4, 4)
-
-@dataclass
-class Note:
-    """Represents a musical element in the score."""
-    index: int
-    relative_index: int
-    line_index: int
-    contour: np.ndarray 
-    bounds: Tuple[int, int, int, int] 
-    relative_position: Tuple[int, int] 
-    absolute_position: Tuple[int, int] 
-    label: Optional[str] = None
+from p2m.elements import StaffLine, Note, Key
 
 class PParser:
     

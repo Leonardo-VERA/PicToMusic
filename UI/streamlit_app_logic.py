@@ -1,7 +1,6 @@
-from pic2music import PParser
+from p2m.parser import PParser
 import numpy as np
 import streamlit as st
-import cv2
 
 def parse_music_sheet(image, progress_bar, params=None):
     parser = PParser()
