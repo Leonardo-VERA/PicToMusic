@@ -1,4 +1,4 @@
-from p2m.parser import PParser
+from p2m.parser import PParser	
 import numpy as np
 import streamlit as st
 
@@ -50,8 +50,6 @@ def parse_music_sheet(image, progress_bar, params=None):
         show_staff_contours=True,
         show_note_bounds=False,
         show_note_contours=False,
-        show_key_bounds=False,
-        show_key_contours=False
     )
     
     notes_visualization = parser.draw_staff_lines(
@@ -60,9 +58,7 @@ def parse_music_sheet(image, progress_bar, params=None):
         show_staff_bounds=False,
         show_staff_contours=False,
         show_note_bounds=True,
-        show_note_contours=True,
-        show_key_bounds=True,
-        show_key_contours=True
+        show_note_contours=True
     )
     
     # Extract note information
