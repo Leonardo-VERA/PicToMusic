@@ -9,19 +9,19 @@ def parse_music_sheet(image, progress_bar, params=None):
     
     if params is None:
         params = {
-            'resize_max_dim': 1200,
+            'resize_max_dim': 1600,
             'staff_dilate_iterations': 3,
             'staff_min_contour_area': 10000,
             'staff_pad_size': 0,
-            'note_dilate_iterations': 2,
-            'note_min_contour_area': 50,
+            'note_dilate_iterations': 3,
+            'note_min_contour_area': 75,
             'note_pad_size': 0,
             'max_horizontal_distance': 10,
-            'overlap_threshold': 0.8
+            'overlap_threshold': 0.2
         }
     
+    image = parser.load_image(image)
     image = parser.resize(image, max_dim=params['resize_max_dim'])
-    processed_image = parser.process_image(image)
     
     staff_lines = parser.find_staff_lines(
         dilate_iterations=params['staff_dilate_iterations'],
@@ -46,7 +46,7 @@ def parse_music_sheet(image, progress_bar, params=None):
     staff_visualization = parser.draw_staff_lines(
         image.copy(), 
         staff_lines,
-        show_staff_bounds=True,
+        show_staff_bounds=False,
         show_staff_contours=True,
         show_note_bounds=False,
         show_note_contours=False,
