@@ -92,7 +92,7 @@ PicToMusic is an advanced computer vision application that transforms sheet musi
 
 1. **Image Preprocessing**
    ```python
-   def process_image(image):
+   def improcess(image):
        # Convert to grayscale
        # Invert colors
        # Apply adaptive thresholding
@@ -128,7 +128,7 @@ PicToMusic is an advanced computer vision application that transforms sheet musi
 @dataclass
 class StaffLine:
     index: int
-    line_contour: np.ndarray
+    contour: np.ndarray
     bounds: Tuple[int, int, int, int]
     notes: List[Note]
     key: Optional[Key]
@@ -152,11 +152,15 @@ class Note:
 - ✅ Staff line detection and segmentation
 - ✅ Note component detection and grouping
 - ✅ Interactive web interface with Streamlit
+- ✅ Real-time image processing visualization
+- ✅ Configurable processing parameters
 
 ### In Development
 - 🔄 CRNN model integration for symbol recognition
 - 🔄 ABC notation converter
 - 🔄 MIDI generation system
+- 🔄 Note classification and pitch detection
+- 🔄 Time signature and rhythm analysis
 
 ### Future Enhancements
 - 📋 Support for complex musical notations
@@ -197,9 +201,10 @@ streamlit run app.py
    - Automatic image enhancement
 
 3. Configure processing parameters:
-   - Image resolution (default: 1200px max dimension)
+   - Image resolution
    - Staff line detection sensitivity
    - Note detection parameters
+   - Overlap threshold for component grouping
 
 4. Process and generate output:
    - Visual feedback of detection results
