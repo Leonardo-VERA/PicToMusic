@@ -9,17 +9,37 @@ from p2m.scoretyping import StaffLine, Note, Key
 
 class PParser:
     
-    def imread(self, path: str) -> np.ndarray:
+    def load_image(self, input_source: Union[str, np.ndarray]) -> np.ndarray:
         """
-        Load an image from a file path.
+        Load and preprocess an image from either a file path or numpy array.
         
         Args:
-            path (str): Path to the image file.
+            input_source: Either a file path (str) or an image array (np.ndarray)
             
         Returns:
-            numpy.ndarray: The loaded image in BGR format.
+            np.ndarray: The preprocessed grayscale image
+            
+        Raises:
+            TypeError: If input_source is neither a string nor numpy array
+            FileNotFoundError: If the image file could not be loaded
         """
-        self.image = cv2.imread(path)
+        if isinstance(input_source, str):
+            self.original_image = cv2.imread(input_source)
+            if self.original_image is None:
+                raise FileNotFoundError(f"Could not load image from path: {input_source}")
+        
+        elif isinstance(input_source, np.ndarray):
+            self.original_image = input_source.copy()
+        
+        else:
+            raise TypeError("Input must be either a file path (str) or numpy array (np.ndarray)")
+        
+        if len(self.original_image.shape) == 3:
+            self.image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
+        else:
+            self.image = self.original_image.copy()
+            
+        self.processed_image = cv2.bitwise_not(self.image)
         return self.image
     
     def imwrite(self, path: str, image: np.ndarray, overwrite: bool = False) -> bool:
@@ -87,23 +107,8 @@ class PParser:
             new_height = int(height * (max_dim / width))
             
         self.resized_shape = (new_width, new_height)
-        self.image = cv2.resize(image, (new_width, new_height))
-        return self.image
-
-    def process_image(self, image: np.ndarray) -> np.ndarray:
-        """
-        Invert the colors of an image. Converts to grayscale if the image is in color.
         
-        Args:
-            image (numpy.ndarray): The image to invert.
-            
-        Returns:
-            numpy.ndarray: The inverted image.
-        """
-        if len(image.shape) == 3:
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        self.processed_image = cv2.bitwise_not(image)
-        return self.processed_image
+        return cv2.resize(image, (new_width, new_height))
     
     def find_contours(self, image: np.ndarray, dilate_iterations: int = 3, 
                       min_contour_area: int = 0, pad_size: int = 0) -> List[np.ndarray]:
@@ -149,15 +154,16 @@ class PParser:
         Returns:
             List[StaffLine]: List of staff lines with their properties and empty note lists.
         """
-        self.staff_line_contours = self.find_contours(self.processed_image, dilate_iterations=dilate_iterations, 
+        staff_line_contours = self.find_contours(self.processed_image, dilate_iterations=dilate_iterations, 
                                       min_contour_area=min_contour_area, pad_size=pad_size)
         
         staff_lines = []
-        for index, contour in enumerate(sorted(self.staff_line_contours, key=lambda c: cv2.boundingRect(c)[1])):
+        for index, contour in enumerate(sorted(staff_line_contours, key=lambda c: cv2.boundingRect(c)[1])):
             bounds = cv2.boundingRect(contour)
             staff_lines.append(StaffLine(
                 index=index,
-                line_contour=contour,
+                image=self.extract_element(bounds) ,
+                contour=contour,
                 bounds=bounds,
                 notes=[]
             ))
@@ -187,9 +193,9 @@ class PParser:
         for line_index, staff_line in enumerate(staff_lines):
 
             mask = np.zeros(self.cleaned_image.shape[:2], dtype=np.uint8)
-            cv2.drawContours(mask, [staff_line.line_contour], -1, (255), -1)
+            cv2.drawContours(mask, [staff_line.contour], -1, (255), -1)
             
-            x, y, w, h = cv2.boundingRect(staff_line.line_contour)
+            x, y, w, h = cv2.boundingRect(staff_line.contour)
             
             line_image = cv2.bitwise_and(self.cleaned_image[y:y+h, x:x+w], 
                                        self.cleaned_image[y:y+h, x:x+w], 
@@ -216,12 +222,17 @@ class PParser:
                 adjusted_contour[:, :, 0] += x
                 adjusted_contour[:, :, 1] += y
                 
+                bounds = (note_bounds[0] + x, note_bounds[1] + y, note_bounds[2], note_bounds[3])
+                full_height_bounds = (bounds[0], y, bounds[2], staff_line.bounds[3])
+                full_height_image = self.extract_element(full_height_bounds)
+                
                 note = Note(
                     index=global_index,          
                     relative_index=relative_index,  
-                    line_index=line_index,          
+                    line_index=line_index,  
+                    image=full_height_image,        
                     contour=adjusted_contour,
-                    bounds=(note_bounds[0] + x, note_bounds[1] + y, note_bounds[2], note_bounds[3]),
+                    bounds=bounds,
                     relative_position=relative_pos,
                     absolute_position=absolute_pos
                 )
@@ -404,7 +415,7 @@ class PParser:
         return orig
     
     def extract_contours(self, image: np.ndarray, contours: List[np.ndarray], 
-                        axis: int, full_height: bool = False) -> List[np.ndarray]:
+                        axis: int = 0, full_height: bool = False) -> List[np.ndarray]:
         """
         Extract regions from an image based on contours, sorted by position.
         
@@ -439,6 +450,10 @@ class PParser:
             results.append(region)
         return results
     
+    def extract_element(self, bounds : Tuple[int, int, int, int]): 
+        x, y, w, h = bounds
+        return self.image[y:y+h, x:x+w]
+    
     def remove_staff_lines(self, image: np.ndarray) -> np.ndarray:
         """
         Remove horizontal staff lines from a music score image.
@@ -456,15 +471,15 @@ class PParser:
 
     def draw_staff_lines(self, image: np.ndarray, staff_lines: List[StaffLine],
                         show_staff_bounds: bool = True,
-                        show_note_bounds: bool = True,
                         show_staff_contours: bool = True,
+                        show_note_bounds: bool = True,
                         show_note_contours: bool = True) -> np.ndarray:
         """
         Draw staff lines and their notes on the image.
         
         Args:
             image: The image to draw on
-            staff_lines: List of staff lines objectsto draw
+            staff_lines: List of staff lines objects to draw
             OPTIONAL : 
                 show_staff_bounds: Whether to show staff bounding boxes
                 show_note_bounds: Whether to show note bounding boxes
@@ -474,7 +489,7 @@ class PParser:
         Returns:
             numpy.ndarray: Image with staff lines and notes
         """
-        result = image.copy()
+        result = self.original_image.copy()
         
         for staff in staff_lines:
             # Staff line
@@ -483,11 +498,10 @@ class PParser:
                 cv2.rectangle(result, (x, y), (x + w, y + h), (0, 255, 0), 2)  # Green
             
             if show_staff_contours:
-                cv2.drawContours(result, [staff.line_contour], -1, (0, 255, 0), 1)  # Green
+                cv2.drawContours(result, [staff.contour], -1, (0, 255, 0), 1)  # Green
             
             # Notes
             for note in staff.notes:
-                
                 if show_note_bounds:
                     x, y, w, h = note.bounds
                     cv2.rectangle(result, (x, y), (x + w, y + h), (255, 0, 0), 2)  # Blue
