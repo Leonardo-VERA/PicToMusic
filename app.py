@@ -109,9 +109,10 @@ with tab1:
         
         if uploaded_file is not None:
             try:
-                st.markdown("""
+                file_name = uploaded_file.name
+                st.markdown(f"""
                     <div class='success-message'>
-                        ✅ File uploaded successfully! Click 'Parse Music Sheet' when ready.
+                        ✅ File "{file_name}" uploaded successfully!
                     </div>
                 """, unsafe_allow_html=True)
                 
@@ -140,7 +141,7 @@ with tab2:
             try:
                 st.markdown("""
                     <div class='success-message'>
-                        ✅ Image captured successfully! Click 'Parse Music Sheet' when ready.
+                        ✅ Image captured successfully!
                     </div>
                 """, unsafe_allow_html=True)
                 
@@ -155,10 +156,10 @@ with tab2:
 if camera_input is not None or uploaded_file is not None:
     st.markdown("---")
     
-    st.subheader("🔧 Image Processing Parameters")
+    st.title("🔧 Image Processing Parameters")
     
-    resize_max_dim = st.slider("Image Resolution", 800, 2000, 1600, 100, 
-                              help="Maximum dimension for image resizing. Higher values provide more detail but slower processing.")
+    # resize_max_dim = st.slider("Image Resolution", 800, 2000, 1600, 100, 
+    #                           help="Maximum dimension for image resizing. Higher values provide more detail but slower processing.")
     
     col_staff, col_notes = st.columns(2)
     
@@ -202,14 +203,14 @@ if camera_input is not None or uploaded_file is not None:
                                     help="Threshold for determining overlapping elements and merge them")
     
     if st.button("🎵 Parse Music Sheet"):
-        st.subheader("Parsing results...")
+        st.title("Parsing results...")
         with st.spinner("🎼 Converting your sheet music..."):
             try:
                 
                 image_source = uploaded_file if uploaded_file is not None else camera_input
                 
                 params = {
-                    'resize_max_dim': int(resize_max_dim),
+                    # 'resize_max_dim': int(resize_max_dim),
                     'staff_dilate_iterations': int(staff_dilate_iterations),
                     'staff_min_contour_area': int(staff_min_contour_area),
                     'staff_pad_size': int(staff_pad_size),

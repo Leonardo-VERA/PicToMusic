@@ -9,30 +9,36 @@ from p2m.scoretyping import StaffLine, Note, Key
 
 class PParser:
     
-    def load_image(self, input_source: Union[str, np.ndarray]) -> np.ndarray:
+    def __init__(self):
+        """Initialize the parser with empty attributes."""
+        self.original_image = None
+        self.image = None
+        self.processed_image = None
+        self.notes_contours = None
+        self.original_shape = None
+        self.resized_shape = None
+        self.filename = None 
+    
+    def load_image(self, input_source: Union[str, np.ndarray], filename: Optional[str] = "image.png") -> np.ndarray:
         """
         Load and preprocess an image from either a file path or numpy array.
         
         Args:
             input_source: Either a file path (str) or an image array (np.ndarray)
+            filename: Optional filename when input_source is an array
             
         Returns:
             np.ndarray: The preprocessed grayscale image
-            
-        Raises:
-            TypeError: If input_source is neither a string nor numpy array
-            FileNotFoundError: If the image file could not be loaded
         """
         if isinstance(input_source, str):
             self.original_image = cv2.imread(input_source)
+            self.filename = os.path.basename(input_source)
             if self.original_image is None:
                 raise FileNotFoundError(f"Could not load image from path: {input_source}")
         
         elif isinstance(input_source, np.ndarray):
             self.original_image = input_source.copy()
-        
-        else:
-            raise TypeError("Input must be either a file path (str) or numpy array (np.ndarray)")
+            self.filename = filename
         
         if len(self.original_image.shape) == 3:
             self.image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
@@ -92,7 +98,7 @@ class PParser:
             numpy.ndarray: The resized image.
             
         Note:
-            Stores original and resized shapes as instance attributes.
+            Updates instance image attributes with resized versions.
         """  
         self.original_shape = image.shape
         if image.shape[0] <= max_dim and image.shape[1] <= max_dim:
@@ -108,7 +114,15 @@ class PParser:
             
         self.resized_shape = (new_width, new_height)
         
-        return cv2.resize(image, (new_width, new_height))
+        resized = cv2.resize(image, (new_width, new_height))
+        
+        if image is self.image:
+            self.image = resized
+            self.processed_image = cv2.bitwise_not(resized)
+        elif image is self.processed_image:
+            self.processed_image = resized
+        
+        return resized
     
     def find_contours(self, image: np.ndarray, dilate_iterations: int = 3, 
                       min_contour_area: int = 0, pad_size: int = 0) -> List[np.ndarray]:
@@ -162,6 +176,7 @@ class PParser:
             bounds = cv2.boundingRect(contour)
             staff_lines.append(StaffLine(
                 index=index,
+                filename=self.filename,
                 image=self.extract_element(bounds) ,
                 contour=contour,
                 bounds=bounds,
@@ -233,6 +248,7 @@ class PParser:
                     image=full_height_image,        
                     contour=adjusted_contour,
                     bounds=bounds,
+                    full_height_bounds=full_height_bounds,
                     relative_position=relative_pos,
                     absolute_position=absolute_pos
                 )

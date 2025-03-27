@@ -9,7 +9,7 @@ def parse_music_sheet(image, progress_bar, params=None):
     
     if params is None:
         params = {
-            'resize_max_dim': 1600,
+            # 'resize_max_dim': 1600,
             'staff_dilate_iterations': 3,
             'staff_min_contour_area': 10000,
             'staff_pad_size': 0,
@@ -21,7 +21,7 @@ def parse_music_sheet(image, progress_bar, params=None):
         }
     
     image = parser.load_image(image)
-    image = parser.resize(image, max_dim=params['resize_max_dim'])
+    # image = parser.resize(image, max_dim=params['resize_max_dim'])
     
     staff_lines = parser.find_staff_lines(
         dilate_iterations=params['staff_dilate_iterations'],
