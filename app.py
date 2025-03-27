@@ -157,7 +157,7 @@ if camera_input is not None or uploaded_file is not None:
     
     st.subheader("🔧 Image Processing Parameters")
     
-    resize_max_dim = st.slider("Image Resolution", 800, 2000, 1200, 100, 
+    resize_max_dim = st.slider("Image Resolution", 800, 2000, 1600, 100, 
                               help="Maximum dimension for image resizing. Higher values provide more detail but slower processing.")
     
     col_staff, col_notes = st.columns(2)
@@ -174,7 +174,7 @@ if camera_input is not None or uploaded_file is not None:
                                                help="Minimum contour area for staff detection")
         
         staff_pad_size = st.number_input("Staff Padding", 
-                                       min_value=0, max_value=50, value=0, step=5,
+                                       min_value=0, max_value=75, value=0, step=5,
                                        help="Adding padding around image to avoid edge effects")
     
     # Note detection parameters
@@ -182,11 +182,11 @@ if camera_input is not None or uploaded_file is not None:
         st.markdown("### Note Detection")
         
         note_dilate_iterations = st.number_input("Note Dilation", 
-                                               min_value=1, max_value=10, value=2, step=1,
+                                               min_value=1, max_value=10, value=3, step=1,
                                                help="Number of dilation iterations for note detection")
         
         note_min_contour_area = st.number_input("Min Note Contour Area", 
-                                              min_value=10, max_value=1000, value=50, step=25,
+                                              min_value=10, max_value=1000, value=100, step=25,
                                               help="Minimum contour area for note detection")
         
         # note_pad_size = st.number_input("Note Padding", 
@@ -235,11 +235,37 @@ if camera_input is not None or uploaded_file is not None:
                 with col_staff_analysis:
                     st.subheader("Staff Lines Analysis")
                     st.image(staff_visualization, caption="Staff Lines and Notes Detection")
+                    
+                    st.markdown("""
+                        <div style='background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-top: 10px;'>
+                            <div style='display: flex; justify-content: space-around; align-items: center;'>
+                                <div style='display: flex; align-items: center;'>
+                                    <div style='width: 30px; height: 3px; background-color: #00FF00; margin-right: 5px;'></div>
+                                    <span>Staff contours</span>
+                                </div>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
                 
                 # Column 2: Note detection results
                 with col_notes_analysis:
                     st.subheader("Notes Detection Analysis")
                     st.image(notes_visualization, caption="Notes Detection")
+                    
+                    st.markdown("""
+                        <div style='background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-top: 10px;'>
+                            <div style='display: flex; justify-content: space-around; align-items: center;'>
+                                <div style='display: flex; align-items: center;'>
+                                    <div style='width: 30px; height: 3px; background-color: #FF0000; margin-right: 5px;'></div>
+                                    <span>Note contours</span>
+                                </div>
+                                <div style='display: flex; align-items: center;'>
+                                    <div style='width: 30px; height: 3px; background-color: #0000FF; margin-right: 5px;'></div>
+                                    <span>Note boundaries</span>
+                                </div>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
                 
                 st.markdown("---")   
                 _, col_metrics1, col_metrics2, col_metrics3, _= st.columns(5)
@@ -265,7 +291,7 @@ if camera_input is not None or uploaded_file is not None:
                     )
                 
                 st.success("✨ Music sheet successfully parsed!")
-
+        
                 st.markdown("""
                     <div class='info-box'>
                         Processing complete! Available options:
