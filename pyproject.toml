@@ -13,7 +13,8 @@ dependencies = [
     "imutils (>=0.5.4,<0.6.0)",
     "numpy (>=1.26.0,<2.2.0)",
     "scipy (>=1.12.0,<2.0.0)",
-    "tensorflow (>=2.15.0,<3.0.0)"
+    "tensorflow (>=2.15.0,<3.0.0)",
+    "loguru (>=0.7.0,<0.8.0)"
 ]
 
 [build-system]
