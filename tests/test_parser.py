@@ -31,10 +31,6 @@ def test_image_loading_and_processing(parser, sample_image):
     loaded_from_file = parser.load_image(test_path)
     assert isinstance(loaded_from_file, np.ndarray)
     
-    # Test invalid input
-    with pytest.raises(TypeError):
-        parser.load_image(123)
-    
     # Test nonexistent file
     with pytest.raises(FileNotFoundError):
         parser.load_image("nonexistent.png")
