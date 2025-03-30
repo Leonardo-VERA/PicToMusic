@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 class StaffLine:
     """Represents a staff line and its associated notes in a music score."""
     index: int
+    filename: str
     image: np.ndarray
     contour: np.ndarray 
     bounds: Tuple[int, int, int, int]
@@ -17,7 +18,7 @@ class StaffLine:
         plt.imshow(self.image, cmap='gray')
         plt.axis('off')
         plt.show()
-        return f"StaffLine(index={self.index}, notes={len(self.notes)})"
+        return f"StaffLine(index={self.index}, filename={self.filename}, notes={len(self.notes)})"
 
     def get_notes_with_label(self, label: str) -> List['Note']:
         """Get all notes with a specific label.
@@ -39,6 +40,7 @@ class Note:
     image: np.ndarray  
     contour: np.ndarray 
     bounds: Tuple[int, int, int, int] 
+    full_height_bounds: Tuple[int, int, int, int]
     relative_position: Tuple[int, int] 
     absolute_position: Tuple[int, int] 
     label: Optional[str] = None
