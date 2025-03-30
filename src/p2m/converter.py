@@ -181,16 +181,3 @@ class MEIConverter:
                         converters.append(MEIConverter(content=file_content))
 
         return converters
-
-
-# Example usage:
-# converter = MEIConverter('../../pic2music/000051778-1_1_1.mei')
-# print(converter.mei_to_abc())
-
-# To convert a ZIP file
-converters = MEIConverter.convert_zip("../../pic2music/data_mei/data.zip", number_of_files=10)
-
-from tqdm import tqdm
-# Access ABC notation of each MEI file
-for conv in tqdm(converters):
-    print(conv.mei_to_abc())
