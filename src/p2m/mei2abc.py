@@ -87,6 +87,8 @@ class MEIConverter:
         Extracts labels for each measure and stores them.
         """
         self.measures_content = {}
+        self.notes_count = 0
+        self.pause_count = 0
 
         for i, measure in enumerate(self.measures):
             measure_notes = []
@@ -96,16 +98,20 @@ class MEIConverter:
                 if symbol.startswith("<beam"):
                     beam_notes = re.findall(r"<note.[\s\S]*?note>|<note.*?/>", symbol)
                     measure_notes.append("".join(self.parse_note(n) for n in beam_notes))
+                    self.notes_count += len(beam_notes)
                 elif symbol.startswith("<note"):
                     measure_notes.append(self.parse_note(symbol))
+                    self.notes_count += 1
                 elif symbol.startswith("<rest"):
                     duration = self.duration_mapping[
                         re.search(r'dur="([^"]*)"', symbol).group(1)
                     ]
                     measure_notes.append(f"z{duration}")
+                    self.pause_count += 1
                 elif symbol.startswith("<multiRest"):
                     duration = re.search(r'num="([^"]*)"', symbol).group(1)
                     measure_notes.append(f"Z{duration}")
+                    self.pause_count += 1
 
             self.measures_content[i] = measure_notes
 
@@ -188,9 +194,9 @@ class MEIConverter:
 # print(converter.mei_to_abc())
 
 # To convert a ZIP file
-converters = MEIConverter.convert_zip("../../pic2music/data_mei/data.zip", number_of_files=10)
+# converters = MEIConverter.convert_zip("../../pic2music/data_mei/data.zip", number_of_files=10)
 
-from tqdm import tqdm
-# Access ABC notation of each MEI file
-for conv in tqdm(converters):
-    print(conv.mei_to_abc())
+# from tqdm import tqdm
+# # Access ABC notation of each MEI file
+# for conv in tqdm(converters):
+#     print(conv.mei_to_abc())
