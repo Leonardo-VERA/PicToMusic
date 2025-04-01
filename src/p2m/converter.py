@@ -1,5 +1,6 @@
 import re
 from zipfile import ZipFile
+import os
 
 
 class MEIConverter:
@@ -87,6 +88,8 @@ class MEIConverter:
         Extracts labels for each measure and stores them.
         """
         self.measures_content = {}
+        self.notes_labels = []
+        self.pause_labels = []
 
         for i, measure in enumerate(self.measures):
             measure_notes = []
@@ -95,17 +98,23 @@ class MEIConverter:
             for symbol in measure_content:
                 if symbol.startswith("<beam"):
                     beam_notes = re.findall(r"<note.[\s\S]*?note>|<note.*?/>", symbol)
-                    measure_notes.append("".join(self.parse_note(n) for n in beam_notes))
+                    beam_notes_labels = [self.parse_note(n) for n in beam_notes]
+                    measure_notes.append("".join(n for n in beam_notes_labels))
+                    self.notes_labels += beam_notes_labels
                 elif symbol.startswith("<note"):
-                    measure_notes.append(self.parse_note(symbol))
+                    note_label = self.parse_note(symbol)
+                    measure_notes.append(note_label)
+                    self.notes_labels.append(note_label)
                 elif symbol.startswith("<rest"):
                     duration = self.duration_mapping[
                         re.search(r'dur="([^"]*)"', symbol).group(1)
                     ]
                     measure_notes.append(f"z{duration}")
+                    self.pause_labels.append(f"z{duration}")
                 elif symbol.startswith("<multiRest"):
                     duration = re.search(r'num="([^"]*)"', symbol).group(1)
                     measure_notes.append(f"Z{duration}")
+                    self.pause_labels.append(f"Z{duration}")
 
             self.measures_content[i] = measure_notes
 
@@ -163,6 +172,70 @@ class MEIConverter:
         abc_content += "]"
         self.abc_content = abc_content
         return abc_content
+    
+    def treble_clef_transposition(self):
+        
+        notes = []
+        for note in self.notes_labels:
+            notes.append(self.convert_note_to_treble(self.score_def["clef"], note))
+       
+        return notes
+    
+    
+    @staticmethod    
+    def convert_note_to_treble(clef, note):
+        """
+        Convert a note from a given clef to its equivalent in the treble clef.
+        This also ensures to handle octaves correctly and strips until the first numerical character.
+        """
+
+        clef_to_treble = {
+        "C1": {  # C on the 1st line
+            'a,': 'c',  'b,': 'd',  'c': 'e',  'd': 'f',  'e': 'g',  
+            'f': 'a',  'g': 'b',  'a': "c'",  'b': "d'",
+        },
+        "C2": {  # C on the 2nd line
+            'f,': 'c',  'g,': 'd',  'a,': 'e',  'b,': 'f',  'c': 'g',  
+            'd': 'a',  'e': 'b',  'f': "c'",  'g': "d'",  'a': "e'",  'b': "f'",
+        },
+        "C3": {  # C on the 3rd line
+            'd,': 'c',  'e,': 'd',  'f,': 'e',  'g,': 'f',  'a,': 'g',  
+            'b,': 'a',  'c': 'b',  'd': "c'",  'e': "d'",  'f': "e'",  'g': "f'",  'a': "g'",  'b': "a'",
+        },
+        "C4": {  # C on the 4th line
+            'b,,': 'c',  'c,': 'd',  'd,': 'e',  'e,': 'f',  'f,': 'g',  
+            'g,': 'a',  'a,': 'b',  'b,': "c'",  'c': "d'",  'd': "e'",  'e': "f'",  'f': "g'",  'g': "a'",  'a': "b'",  'b': "c''",
+        },
+        "F4": {  # F on the 4th line
+            'e,,': 'c',  'f,,': 'd',  'g,,': 'e',  'a,,': 'f',  'b,,': 'g',  'c,': 'a',  
+            'd,': 'b', 'e,': "c'",  'f,': "d'",  'g,': "e'",  'a,': "f'",  'b,': "g'",  'c': "a'",  'd': "b'",  'e': "c''",  'f': "d''",  'g': "e''",  'a': "f''",  'b': "g''"
+        },
+        "F3": {  # F on the 3rd line
+            'e,,':'a,',  'f,,': 'b,',  'g,,': 'c',  'a,,': 'd',  'b,,': 'e',  'c,': 'f',  
+            'd,': 'g', 'e,': 'a',  'f,': 'b',  'g,': "c'",  'a,': "d'",  'b,': "e'",  'c': "f'",  'd': "g'",  'e': "a'",  'f': "b'",  'g': "c''",  'a': "d''",  'b': "e''"
+        },
+    }
+
+        if clef not in clef_to_treble:
+            return note  # If clef is not in mapping, return the note as is.
+
+        # Get the mapping for the current clef
+        clef_mapping = clef_to_treble[clef]
+
+        # Sort keys of the clef mapping by length in descending order
+        sorted_keys = sorted(clef_mapping.keys(), key=lambda x: len(x), reverse=True)
+
+        # Create a regex pattern that matches the note names in the order of longest to shortest
+        pattern = '|'.join(re.escape(key) for key in sorted_keys)
+
+        # Function to replace the matched note with its corresponding value
+        def replace_note(match):
+            matched_note = match.group(0)
+            return clef_mapping.get(matched_note, matched_note)  # Return mapped value or original note
+
+        # Use re.sub to replace the matched notes with corresponding values
+        return re.sub(pattern, replace_note, note)
+        
 
     @staticmethod
     def convert_zip(zip_path, number_of_files=-1):
@@ -174,11 +247,14 @@ class MEIConverter:
         """
         converters = []
         with ZipFile(zip_path, "r") as myzip:
-            for myfile in myzip.infolist()[:number_of_files]:
-                if myfile.filename.endswith(".mei"):
-                    with myzip.open(myfile) as f:
-                        file_content = f.read().decode("utf-8")
-                        converters.append(MEIConverter(content=file_content))
+            # Get a list of all MEI files in the "labels/" folder
+            mei_files = [f for f in myzip.namelist() if f.startswith("labels/") and f.endswith(".mei")]
+            
+            # Limit the number of files to process
+            for mei_file in mei_files[:number_of_files]:
+                with myzip.open(mei_file) as f:
+                    file_content = f.read().decode("utf-8")
+                    converters.append(MEIConverter(content=file_content))
 
         return converters
 
@@ -188,9 +264,10 @@ class MEIConverter:
 # print(converter.mei_to_abc())
 
 # To convert a ZIP file
-converters = MEIConverter.convert_zip("../../pic2music/data_mei/data.zip", number_of_files=10)
+# converters = MEIConverter.convert_zip("resources/dataset/dataset.zip", number_of_files=2000)
 
-from tqdm import tqdm
-# Access ABC notation of each MEI file
-for conv in tqdm(converters):
-    print(conv.mei_to_abc())
+# from tqdm import tqdm
+# # Access ABC notation of each MEI file
+# for conv in tqdm(converters):
+#     if conv.score_def["clef"] not in ["G2", "C1", "F4", "C2", "C3", "C4", "G1", "F3"]:
+#         print(conv.score_def["clef"])
