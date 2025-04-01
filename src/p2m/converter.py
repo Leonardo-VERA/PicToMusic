@@ -257,7 +257,6 @@ class MEIConverter:
                     converters.append(MEIConverter(content=file_content))
 
         return converters
-<<<<<<< HEAD:src/p2m/mei2abc.py
 
 
 # Example usage:
@@ -272,5 +271,3 @@ class MEIConverter:
 # for conv in tqdm(converters):
 #     if conv.score_def["clef"] not in ["G2", "C1", "F4", "C2", "C3", "C4", "G1", "F3"]:
 #         print(conv.score_def["clef"])
-=======
->>>>>>> 7b150eac6a0e9e21db5e668d891825fa2fc05497:src/p2m/converter.py
