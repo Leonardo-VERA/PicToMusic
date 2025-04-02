@@ -1,0 +1,7 @@
+epochs: 100
+batch: -1
+imgsz: 320
+device: "0"
+workers: 8
+optimizer: "AdamW"
+patience: 10 
