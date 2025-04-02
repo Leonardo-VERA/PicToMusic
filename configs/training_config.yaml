@@ -1,3 +1,4 @@
+project: "runs/detect"
 epochs: 100
 batch: -1
 imgsz: 320
