@@ -12,7 +12,7 @@ class StaffLine:
     bounds: Tuple[int, int, int, int]
     notes: List['Note'] = field(default_factory=list)
     
-    def __repr__(self) -> str:
+    def show(self) -> str:
         """Return a string representation of the staff line."""
         plt.figure(figsize=(10, 4))
         plt.imshow(self.image, cmap='gray')
@@ -45,7 +45,7 @@ class Note:
     absolute_position: Tuple[int, int] 
     label: Optional[str] = None
 
-    def display(self) -> str:
+    def show(self) -> str:
         """Return a string representation of the note."""
         plt.figure(figsize=(2, 2))
         plt.imshow(self.image, cmap='gray')

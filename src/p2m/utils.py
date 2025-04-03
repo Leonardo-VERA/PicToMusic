@@ -68,7 +68,7 @@ def generate_detection_csv(staff_lines_list: List[List[StaffLine]],
                     ])
                     
 
-def extract_dataset(zip_path: str):
+def extract_dataset(zip_path: str, output_path: str):
     
     if not os.path.exists(zip_path):
         raise FileNotFoundError(f"Could not find {zip_path}")
@@ -80,12 +80,12 @@ def extract_dataset(zip_path: str):
         
         with tqdm(total=total_size, unit='B', unit_scale=True, desc="Extracting") as pbar:
             for file in zip_ref.filelist:
-                zip_ref.extract(file)
+                zip_ref.extract(file, output_path)
                 pbar.update(file.file_size)
     
     loguru.logger.info(f"Successfully extracted {zip_path}")
     
-def split_data(input_path: str, output_path: str, batch_size: int, num_batch: int):
+def split_data(input_path: str, output_path: str, batch_size: int, num_batch: int, random_seed: int = None):
     """
     Split the dataset into multiple batches and save them to the output path.
     
@@ -94,22 +94,46 @@ def split_data(input_path: str, output_path: str, batch_size: int, num_batch: in
         output_path (str): Path to save the batches
         batch_size (int): Number of files per batch
         num_batch (int): Number of batches to create
+        random_seed (int, optional): If provided, randomize the order of files using this seed
     """
-
+    
     os.makedirs(output_path, exist_ok=True)
     
-    files = os.listdir(input_path)
+    image_files = sorted(os.listdir(os.path.join(input_path, 'images')))
+    mei_files = sorted(os.listdir(os.path.join(input_path, 'labels')))
+    
+    file_pairs = list(zip(image_files, mei_files))
+    
+    if random_seed is not None:
+        import random
+        random.seed(random_seed)
+        random.shuffle(file_pairs)
+        image_files, mei_files = zip(*file_pairs) 
+    
+    # loguru.logger.info(f"Found {len(image_files)} images and {len(mei_files)} MEI files")
     
     for batch_num in tqdm(range(num_batch), desc="Processing batches", total=num_batch, unit="batch"):
         batch_folder = os.path.join(output_path, f'batch_{batch_num}')
         os.makedirs(batch_folder, exist_ok=True)
         
         start_idx = batch_num * batch_size
-        end_idx = min((batch_num + 1) * batch_size, len(files))
+        end_idx = min((batch_num + 1) * batch_size, len(image_files))
         
-        for file_name in files[start_idx:end_idx]:
-            src = os.path.join(input_path, file_name)
-            dst = os.path.join(batch_folder, file_name)
-            shutil.copy2(src, dst)
+        # loguru.logger.info(f"Processing batch {batch_num} ({end_idx - start_idx} files)")
+        
+        os.makedirs(os.path.join(batch_folder, 'images'), exist_ok=True)
+        os.makedirs(os.path.join(batch_folder, 'labels'), exist_ok=True)
+        
+        for file_name, mei_file in zip(image_files[start_idx:end_idx], mei_files[start_idx:end_idx]):
+            src_img = os.path.join(input_path, 'images', file_name)
+            dst_img = os.path.join(batch_folder, 'images', file_name)
+            shutil.copy2(src_img, dst_img)
+            # loguru.logger.debug(f"Copied {src_img} to {dst_img}")
+
+            src_mei = os.path.join(input_path, 'labels', mei_file)
+            dst_mei = os.path.join(batch_folder, 'labels', mei_file)
+            shutil.copy2(src_mei, dst_mei)
+            # loguru.logger.debug(f"Copied {src_mei} to {dst_mei}")
+                
     loguru.logger.info(f"Successfully processed {num_batch} batches and saved to {output_path}")
     return output_path
