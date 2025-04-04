@@ -187,10 +187,16 @@ def abc_to_image(abc_file):
     abc_score.show('musicxml.png')
 
 if __name__ == "__main__":
+    import cv2
+    from p2m.parser import PParser
 
-    image_path = "data/dataset/images/000051650-1_1_1.png"
+    image_path = "resources/samples/mary.png"
     loguru.logger.info("Predicting...")
-    results = list(predict(image_path, model_path="models/chopin.pt"))
+    parser = PParser()
+    parser.load_image(image_path)
+    stafflines = parser.find_staff_lines(min_contour_area=10000)
+    staffs = [cv2.cvtColor(staffline.image, cv2.COLOR_RGB2BGR) for staffline in stafflines]
+    results = list(predict(staffs[0], model_path="models/chopin.pt"))
     loguru.logger.info("Converting to ABC...")
     abc = converter_yolo.yolo_to_abc(results)
     loguru.logger.info(f"ABC converted : \n{abc}")
