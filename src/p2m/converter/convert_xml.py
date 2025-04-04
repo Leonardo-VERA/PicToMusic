@@ -2,7 +2,7 @@ import re
 from zipfile import ZipFile
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
-from xml.etree import ElementTree as ET
+from lxml import etree as ET
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from abc import ABC
