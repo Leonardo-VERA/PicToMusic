@@ -88,7 +88,7 @@ def compare_mei_to_parser(file_name, myzip, output_dir, yaml_path, model):
     with myzip.open('labels/' + file_name + '.mei') as mei_file, myzip.open('images/' + file_name + '.png') as img_file:
         mei_content = mei_file.read().decode('utf-8')  # Decode the byte data to a string
         # Pass the MEI content to the MEIConverter
-        mei = OptimizedMEIConverter(content=mei_content)
+        mei = XMLMEIConverter(content=mei_content)
         mei.mei_to_abc()
         mei_clef, mei_gamme = mei.score_def.clef, mei.score_def.key
         mei_metrics = "4/4" if mei.score_def.meter_count == '' else str(mei.score_def.meter_count) + '/' + str(mei.score_def.meter_unit)
