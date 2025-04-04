@@ -28,7 +28,7 @@ def train(data_path: str, model_path: str, config_path: str):
         **training_config
     )
 
-@p2m.command(name='play-midi-from-yolo', help='Play a MIDI file from YOLO predictions')
+@p2m.command(name='play-yolo', help='Play a MIDI file from YOLO predictions')
 @click.option('--image-path', '-i', required=True, help='Path to the image file for YOLO predictions')
 @click.option('--model-path', '-m', required=True, help='Path to the trained YOLO model')
 @click.option('--instrument_class', '-inst', default='Piano', help='Instrument to use for the MIDI output (e.g., PanFlute, Piano, Violin)')

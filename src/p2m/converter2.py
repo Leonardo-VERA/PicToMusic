@@ -11,6 +11,34 @@ import time
 import pandas as pd
 from tqdm import tqdm
 
+# Clef transposition mappings
+CLEF_TO_TREBLE = {
+    "C1": {  # C on the 1st line
+        'a,': 'c',  'b,': 'd',  'c': 'e',  'd': 'f',  'e': 'g',  
+        'f': 'a',  'g': 'b',  'a': "c'",  'b': "d'",
+    },
+    "C2": {  # C on the 2nd line
+        'f,': 'c',  'g,': 'd',  'a,': 'e',  'b,': 'f',  'c': 'g',  
+        'd': 'a',  'e': 'b',  'f': "c'",  'g': "d'",  'a': "e'",  'b': "f'",
+    },
+    "C3": {  # C on the 3rd line
+        'd,': 'c',  'e,': 'd',  'f,': 'e',  'g,': 'f',  'a,': 'g',  
+        'b,': 'a',  'c': 'b',  'd': "c'",  'e': "d'",  'f': "e'",  'g': "f'",  'a': "g'",  'b': "a'",
+    },
+    "C4": {  # C on the 4th line
+        'b,,': 'c',  'c,': 'd',  'd,': 'e',  'e,': 'f',  'f,': 'g',  
+        'g,': 'a',  'a,': 'b',  'b,': "c'",  'c': "d'",  'd': "e'",  'e': "f'",  'f': "g'",  'g': "a'",  'a': "b'",  'b': "c''",
+    },
+    "F4": {  # F on the 4th line
+        'e,,': 'c',  'f,,': 'd',  'g,,': 'e',  'a,,': 'f',  'b,,': 'g',  'c,': 'a',  
+        'd,': 'b', 'e,': "c'",  'f,': "d'",  'g,': "e'",  'a,': "f'",  'b,': "g'",  'c': "a'",  'd': "b'",  'e': "c''",  'f': "d''",  'g': "e''",  'a': "f''",  'b': "g''"
+    },
+    "F3": {  # F on the 3rd line
+        'e,,':'a,',  'f,,': 'b,',  'g,,': 'c',  'a,,': 'd',  'b,,': 'e',  'c,': 'f',  
+        'd,': 'g', 'e,': 'a',  'f,': 'b',  'g,': "c'",  'a,': "d'",  'b,': "e'",  'c': "f'",  'd': "g'",  'e': "a'",  'f': "b'",  'g': "c''",  'a': "d''",  'b': "e''"
+    },
+}
+
 
 @dataclass
 class ScoreDefinition:
@@ -39,33 +67,6 @@ class BaseMEIConverter(ABC):
         "4f": "Ab", "5f": "Db", "6f": "Gb", "7f": "Cb"
     }
     
-    # Clef transposition mappings
-    CLEF_TO_TREBLE = {
-        "C1": {  # C on the 1st line
-            'a,': 'c',  'b,': 'd',  'c': 'e',  'd': 'f',  'e': 'g',  
-            'f': 'a',  'g': 'b',  'a': "c'",  'b': "d'",
-        },
-        "C2": {  # C on the 2nd line
-            'f,': 'c',  'g,': 'd',  'a,': 'e',  'b,': 'f',  'c': 'g',  
-            'd': 'a',  'e': 'b',  'f': "c'",  'g': "d'",  'a': "e'",  'b': "f'",
-        },
-        "C3": {  # C on the 3rd line
-            'd,': 'c',  'e,': 'd',  'f,': 'e',  'g,': 'f',  'a,': 'g',  
-            'b,': 'a',  'c': 'b',  'd': "c'",  'e': "d'",  'f': "e'",  'g': "f'",  'a': "g'",  'b': "a'",
-        },
-        "C4": {  # C on the 4th line
-            'b,,': 'c',  'c,': 'd',  'd,': 'e',  'e,': 'f',  'f,': 'g',  
-            'g,': 'a',  'a,': 'b',  'b,': "c'",  'c': "d'",  'd': "e'",  'e': "f'",  'f': "g'",  'g': "a'",  'a': "b'",  'b': "c''",
-        },
-        "F4": {  # F on the 4th line
-            'e,,': 'c',  'f,,': 'd',  'g,,': 'e',  'a,,': 'f',  'b,,': 'g',  'c,': 'a',  
-            'd,': 'b', 'e,': "c'",  'f,': "d'",  'g,': "e'",  'a,': "f'",  'b,': "g'",  'c': "a'",  'd': "b'",  'e': "c''",  'f': "d''",  'g': "e''",  'a': "f''",  'b': "g''"
-        },
-        "F3": {  # F on the 3rd line
-            'e,,':'a,',  'f,,': 'b,',  'g,,': 'c',  'a,,': 'd',  'b,,': 'e',  'c,': 'f',  
-            'd,': 'g', 'e,': 'a',  'f,': 'b',  'g,': "c'",  'a,': "d'",  'b,': "e'",  'c': "f'",  'd': "g'",  'e': "a'",  'f': "b'",  'g': "c''",  'a': "d''",  'b': "e''"
-        },
-    }
 
     def __init__(self, file_name: Optional[str] = None, content: Optional[str] = None):
         """
@@ -154,10 +155,10 @@ class BaseMEIConverter(ABC):
     @classmethod
     def _convert_note_to_treble(cls, clef: str, note: str) -> str:
         """Convert a note from a given clef to its equivalent in the treble clef."""
-        if clef not in cls.CLEF_TO_TREBLE:
+        if clef not in CLEF_TO_TREBLE:
             return note
 
-        clef_mapping = cls.CLEF_TO_TREBLE[clef]
+        clef_mapping = CLEF_TO_TREBLE[clef]
         sorted_keys = sorted(clef_mapping.keys(), key=len, reverse=True)
         pattern = '|'.join(re.escape(key) for key in sorted_keys)
 
