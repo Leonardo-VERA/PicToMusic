@@ -1,8 +1,61 @@
-project: "runs/detect"
+# YOLO training configuration
+
+# Training epochs
 epochs: 100
+
+# Batch size (-1 for autobatch)
 batch: -1
+
+# Input image size
 imgsz: 320
-device: "0"
+
+# Device to run on (empty string for auto-detect)
+device: ''
+
+# Number of worker threads for data loading
 workers: 8
-optimizer: "AdamW"
-patience: 10 
+
+# Optimizer to use (SGD, Adam, AdamW, etc.)
+optimizer: AdamW
+
+# Learning rate
+lr0: 0.01  # Initial learning rate
+lrf: 0.01  # Final learning rate (lr0 * lrf)
+
+# Weight decay for regularization
+weight_decay: 0.0005
+
+# Warmup epochs
+warmup_epochs: 3.0
+warmup_momentum: 0.8
+warmup_bias_lr: 0.1
+
+# Box loss gain
+box: 7.5
+
+# Classification loss gain
+cls: 0.5
+
+# DFL loss gain
+dfl: 1.5
+
+# Epochs to wait for no observable improvement for early stopping
+patience: 10
+
+# Save best model only
+save_best: true
+
+# Save last model
+save_last: true
+
+# Save period (epochs between saves)
+save_period: -1
+
+# Validation settings
+val: true  # Validate during training
+val_interval: 1  # Validate every N epochs
+
+# Augmentation settings
+mosaic: 1.0  # Mosaic augmentation probability
+mixup: 0.0  # Mixup augmentation probability
+copy_paste: 0.0  # Copy-paste augmentation probability 

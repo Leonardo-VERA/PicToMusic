@@ -1,4 +1,7 @@
 from ultralytics import YOLO
+from numpy import ndarray
+from torch import Tensor
+from pathlib import Path
 
 def train(data_path: str, model_path: str = "yolo11n.pt", **kwargs):
     """
@@ -27,18 +30,6 @@ def train(data_path: str, model_path: str = "yolo11n.pt", **kwargs):
     return model
 
 
-def predict(model_path: str, image_path: str, save : bool = False, save_path: str = None):
+def predict(image: str | Path | int | list | tuple | ndarray | Tensor = None, model_path: str = "models/yolo11n.pt", **kwargs):
     model = YOLO(model_path)
-    return model.predict(image_path, save=save, project=save_path)
-
-if __name__ == "__main__":
-    train(data_path="data/YOLOv3/dataset.yaml", 
-          model_path="models/yolo11n.pt", 
-          epochs=100,
-          batch=-1,
-          workers=8,
-          device=0,
-          patience=10,
-          optimizer='AdamW',
-          imgsz=320
-          )
+    return model.predict(image, **kwargs)

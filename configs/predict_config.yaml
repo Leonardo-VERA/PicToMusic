@@ -1,0 +1,36 @@
+# YOLO prediction configuration
+
+# Confidence threshold for detections (0-1)
+conf: 0.25
+
+# IoU threshold for Non-Maximum Suppression (0-1)
+iou: 0.7
+
+# Input image size
+imgsz: 640
+
+# Device to run on (empty string for auto-detect)
+device: ''
+
+# Visualization settings
+show: false
+show_labels: true
+show_conf: true
+
+# Save settings
+save: false
+save_txt: false
+save_conf: false
+save_crop: false
+
+# Maximum number of detections per image
+max_det: 300
+
+# Line width for bounding boxes (None for auto)
+line_width: null
+
+# Use half precision (FP16)
+half: false
+
+# Use OpenCV DNN for ONNX inference
+dnn: false 
