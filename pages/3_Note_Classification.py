@@ -4,18 +4,18 @@ import cv2
 from UI.statics import apply_custom_css, create_file_uploader, create_camera_input, info_box
 import pickle
 from ultralytics import YOLO
-from p2m.converter import yolo_to_abc, abc_to_midi, abc_to_audio, abc_to_musescore
+from sonatabene.converter import yolo_to_abc, abc_to_midi, abc_to_audio, abc_to_musescore
 from music21 import instrument
 from io import BytesIO
-from p2m.converter.converter_abc import INSTRUMENT_MAP
+from sonatabene.converter.converter_abc import INSTRUMENT_MAP
 from midi2audio import FluidSynth
 import tempfile
 import os
-from p2m.utils import get_musescore_path 
+from sonatabene.utils import get_musescore_path 
 import webbrowser
 
 st.set_page_config(
-    page_title="Chopin - Note Detection",
+    page_title="Chopin - Note Classification",
     page_icon="🎼",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -24,7 +24,7 @@ st.set_page_config(
 
 apply_custom_css()
 
-st.title("🎼 Pic to Music App - Chopin - Final Note Detection")
+st.title("🎼 Chopin - Note Classification")
 st.markdown("""
     <div class='info-box'>
         Finalize your music sheet processing and generate playable music! This page allows you to refine the detected notes and convert them into MIDI files. 🎵
@@ -182,7 +182,6 @@ if camera_input is not None or uploaded_file is not None:
                 except (FileNotFoundError, OSError) as e:
                     st.error(f"Error: {str(e)}")
     
-                        # Show a button to redirect to the MuseScore download page
                     if st.button("🎶 Download MuseScore 4"):
                         webbrowser.open("https://musescore.org/en/download")
 
