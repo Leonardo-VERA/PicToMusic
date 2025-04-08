@@ -113,15 +113,41 @@ def yolo_to_abc(results):
         sorted_notes = [class_names[int(d[0])] for d in sorted_detections]
 
         if i == 0:
-            # Handle key signature
+            # 🎼 Déterminer la tonalité et la clé
+            key = None
+
+            # ✅ Cas 1 : Si la condition est remplie directement
             if len(sorted_notes) > 1 and sorted_notes[1] in GAMMES.values():
                 key = sorted_notes[1]
-                abc_content[5] = f"K:{key} clef={CLEF_ABC_MAPPING.get(sorted_notes[0], 'treble')}"
+            else:
+                # 🔍 Cas 2 : Chercher une gamme valide ailleurs dans sorted_notes
+                for note in sorted_notes:
+                    if note in GAMMES.values():
+                        key = note
+                        break  # Dès qu'on en trouve une, on s'arrête
 
-            # Handle time signature
-            if len(sorted_notes) > 2 and bool(re.match(r'^\d+/\d+$', sorted_notes[2])):
+            # ✍️ Mise à jour du champ K: dans abc_content si une gamme a été trouvée
+            if key:
+                clef = CLEF_ABC_MAPPING.get(sorted_notes[0], 'treble')
+                abc_content[5] = f"K:{key} clef={clef}"
+
+            # 🕒 Déterminer la mesure (time signature)
+            time_sig = None
+
+            # ✅ Cas 1 : Si la signature temporelle est bien placée
+            if len(sorted_notes) > 2 and re.match(r'^\d+/\d+$', sorted_notes[2]):
                 time_sig = sorted_notes[2]
+            else:
+                # 🔍 Cas 2 : Chercher une time signature valide ailleurs dans sorted_notes
+                for note in sorted_notes:
+                    if re.match(r'^\d+/\d+$', note):
+                        time_sig = note
+                        break  # Dès qu'on en trouve une, on l'utilise
+
+            # ✍️ Mise à jour du champ M: dans abc_content si une mesure a été trouvée
+            if time_sig:
                 abc_content[2] = f"M:{time_sig}"
+
 
         # Process notes for this line
         notes = [n for n in sorted_notes if n not in GAMMES.values() and n not in CLEF_ABC_MAPPING and not bool(re.match(r'^\d+/\d+$', n))] if len(sorted_notes) > 3 else []
