@@ -6,8 +6,9 @@ import tempfile
 import os
 from UI.statics import apply_custom_css, create_file_uploader, create_camera_input
 from sonatabene.parser import PParser
-from sonatabene.model import predict
+from ultralytics import YOLO
 from sonatabene.converter import yolo_to_abc, abc_to_midi, abc_to_musescore, abc_to_audio, abc_to_musescore
+from sonatabene.model import predict_with_api
 from sonatabene.converter.converter_abc import INSTRUMENT_MAP
 from sonatabene.utils import get_musescore_path
 from midi2audio import FluidSynth
@@ -18,6 +19,8 @@ if 'step' not in st.session_state:
     st.session_state.step = 1
 if 'image' not in st.session_state:
     st.session_state.image = None
+if 'image_color' not in st.session_state:
+    st.session_state.image_color = None
 if 'staves' not in st.session_state:
     st.session_state.staves = None
 if 'staff_visualization' not in st.session_state:
@@ -63,95 +66,71 @@ if st.session_state.step >= 1:
             else:
                 st.session_state.image = cv2.imdecode(np.frombuffer(uploaded_file.read(), np.uint8), cv2.IMREAD_COLOR)
             st.success("✅ Image loaded successfully!")
+
+            st.session_state.image_color = cv2.cvtColor(st.session_state.image, cv2.COLOR_RGB2BGR)
+            
             st.session_state.step = 2
         except Exception as e:
             st.error(f"❌ Error processing image: {str(e)}")
-        
 
-# Step 2: Staffline Detection
+# Step 2: Note Classification
 if st.session_state.step >= 2 and st.session_state.image is not None:
-    st.title("Step 2: Staffline Detection")
-    
+    st.title("Step 2: Note Classification")
+
+    model = YOLO(model="models/chopin.pt")
+
     col1, col2 = st.columns(2)
     with col1:
-        staff_line_dilation = st.number_input("Staff Line Dilation", 1, 5, 3, 
-                                      help="Controls how much to dilate staff lines. Higher values may help with thicker lines.")
+        confidence_threshold = st.slider(
+            "Confidence Threshold",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.55,
+            step=0.05,
+            help="Minimum confidence score for detections"
+        )
+        
     with col2:
-        min_staff_area = st.number_input("Min Staff Contour Area", 1000, 100000, 10000, 1000,
-                                 help="Minimum area for staff detection. Adjust if staff lines are not being detected properly.")
-
-    if st.button("🔍 Detect Staff Lines"):
-        with st.spinner("Detecting staff lines..."):
-            parser = PParser()
-            parser.load_image(st.session_state.image)
-            st.session_state.staves = parser.find_staff_lines(
-                dilate_iterations=staff_line_dilation,
-                min_contour_area=min_staff_area, 
-            )
-            st.session_state.staves = parser.find_notes(staff_lines=st.session_state.staves)
-            st.session_state.staff_visualization = parser.draw_staff_lines(
-                st.session_state.image.copy(), 
-                st.session_state.staves,
-                show_staff_bounds=True,
-                show_staff_contours=True,
-                show_note_bounds=True,
-                show_note_contours=True,
-            )
-            
-            st.image(st.session_state.staff_visualization, 
-                    caption="Detected Staff Lines", 
-                    use_container_width=True)
-            st.success(f"✅ Found {len(st.session_state.staves)} staff lines!")
-            st.session_state.step = 3
-
-# Step 3: Note Classification
-if st.session_state.step >= 3 and st.session_state.staves is not None:
-    st.title("Step 3: Note Classification")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        note_dilation = st.slider("Note Dilation", 1, 5, 3,
-                               help="Controls how much to dilate notes. Higher values may help with thicker notes.")
-    with col2:
-        threshold = st.slider("Threshold", 0.0, 1.0, 0.5,
-                           help="Minimum threshold for note detection. Adjust if notes are not being detected properly.")
+        nms_threshold = st.slider(
+            "NMS Threshold",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.5,
+            step=0.05,
+            help="Non-Maximum Suppression threshold"
+        )
 
     if st.button("🎵 Classify Notes"):
         with st.spinner("Classifying notes..."):
             st.session_state.predictions = []
-            n_staves = len(st.session_state.staves)
-            progress_bar = st.progress(0)
+
+            result = model.predict(source=st.session_state.image_color, 
+                            conf=confidence_threshold,
+                            iou=nms_threshold,
+                            save=False)[0]
+            st.session_state.predictions.append(result)
             
-            for i, staff in enumerate(st.session_state.staves):
-                result = predict(image=cv2.cvtColor(staff.image, cv2.COLOR_RGB2BGR), 
-                               model_path="models/chopin.pt", 
-                               conf=threshold,
-                               save=False)[0]
-                st.session_state.predictions.append(result)
+            st.image(result.plot(), 
+                    caption=f"Note Classification",
+                    use_container_width=True)
                 
-                st.image(result.plot(), 
-                        caption=f"Staff {i+1}/{n_staves} Note Classification",
-                        use_container_width=True)
-                
-                progress_bar.progress((i + 1) / n_staves)
-
             st.success("✅ Notes classified successfully!")
-            st.session_state.step = 4
+            st.session_state.step = 3
 
-# Step 4: ABC Notation
-if st.session_state.step >= 4 and st.session_state.predictions is not None:
-    st.title("Step 4: ABC Notation")
+# Step 3: ABC Notation
+if st.session_state.step >= 3 and st.session_state.predictions is not None:
+    st.title("Step 3: ABC Notation")
     
     if st.button("🎼 Convert to ABC"):
         with st.spinner("Converting to ABC notation..."):
             st.session_state.abc_code = yolo_to_abc(st.session_state.predictions)
             st.code(st.session_state.abc_code, language="abc")
             st.success("✅ ABC notation generated!")
-            st.session_state.step = 5
+            st.session_state.step = 4
 
-# Step 5: Audio Generation
-if st.session_state.step >= 5 and st.session_state.abc_code is not None:
-    st.title("Step 5: Audio Generation")
+# Step 4: Audio Generation
+if st.session_state.step >= 4 and st.session_state.abc_code is not None:
+    st.title("Step 4: Audio Generation")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -233,4 +212,3 @@ if st.session_state.step >= 5 and st.session_state.abc_code is not None:
                 st.error("❌ Fluidsynth not found. Please install it.")
             except Exception as e:
                 st.error(f"❌ An error occurred: {str(e)}")
-
